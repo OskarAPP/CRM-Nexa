@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Prueba Evolution API</title>
+</head>
+<body>
+<h2>Enviar Mensajes WhatsApp</h2>
+
+<label>Números (separados por comas):</label><br>
+<input type="text" id="numeros" value="5219961122642,5219821295240"><br><br>
+
+<label>Mensaje:</label><br>
+<textarea id="mensaje" rows="3" cols="40">Hola 👋 este es un mensaje de prueba</textarea><br><br>
+
+<button onclick="enviarMensajes()">Enviar</button>
+
+<h3>Resultados:</h3>
+<pre id="resultados"></pre>
+
+<script>
+async function enviarMensajes() {
+    const numeros = document.getElementById('numeros').value.split(',').map(n => n.trim());
+    const mensaje = document.getElementById('mensaje').value;
+
+    const response = await fetch('http://127.0.0.1:8000/api/send-message', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ numeros, mensaje })
+    });
+
+    const data = await response.json();
+    document.getElementById('resultados').textContent = JSON.stringify(data, null, 2);
+}
+</script>
+</body>
+</html>
