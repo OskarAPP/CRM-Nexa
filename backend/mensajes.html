@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Business Message Manager</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="mensajes.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <i class="fas fa-comment-dots"></i>
+      </div>
+      <h1>Business Message Manager</h1>
+      <p class="subtitle">Envíe mensajes y medios a sus contactos de WhatsApp de forma profesional</p>
+    </header>
+    
+    <div class="message-container">
+      <div class="tabs">
+        <div class="tab active" data-tab="texto">
+          <i class="fas fa-font"></i> Mensaje de Texto
+        </div>
+        <div class="tab" data-tab="media">
+          <i class="fas fa-photo-video"></i> Medios
+        </div>
+      </div>
+      
+      <!-- Pestaña de Texto -->
+      <div class="tab-content active" id="texto-tab">
+        <div class="form-group">
+          <label for="numeros"><i class="fas fa-phone"></i> Números de destino</label>
+          <input type="text" id="numeros" class="input-field" value="5219961122642,5219821295240" placeholder="Ingrese números separados por comas">
+          <p class="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="mensaje"><i class="fas fa-envelope"></i> Mensaje</label>
+          <textarea id="mensaje" class="textarea-field" placeholder="Escriba su mensaje aquí">Hola 👋 este es un mensaje de prueba</textarea>
+        </div>
+        
+        <div class="actions">
+          <button id="send-btn" class="btn" onclick="enviarMensajes()">
+            <i class="fas fa-paper-plane"></i> Enviar Mensajes
+          </button>
+        </div>
+      </div>
+      
+      <!-- Pestaña de Medios -->
+      <div class="tab-content" id="media-tab">
+        <div class="form-group">
+          <label for="media-numeros"><i class="fas fa-phone"></i> Números de destino</label>
+          <input type="text" id="media-numeros" class="input-field" value="5219961122642,5219821295240" placeholder="Ingrese números separados por comas">
+          <p class="input-hint">Separe los números con comas. Incluya el código de país</p>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mediatype"><i class="fas fa-file"></i> Tipo de Medio</label>
+            <select id="mediatype" class="select-field">
+              <option value="image">Imagen</option>
+              <option value="video">Video</option>
+              <option value="document">Documento</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="mimetype"><i class="fas fa-code"></i> Tipo MIME</label>
+            <select id="mimetype" class="select-field">
+              <option value="image/jpeg">image/jpeg (JPEG)</option>
+              <option value="image/png">image/png (PNG)</option>
+              <option value="image/gif">image/gif (GIF)</option>
+              <option value="video/mp4">video/mp4 (MP4)</option>
+              <option value="application/pdf">application/pdf (PDF)</option>
+              <option value="application/msword">application/msword (DOC)</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Input para subir archivo -->
+        <div class="form-group">
+          <label for="mediaFile"><i class="fas fa-upload"></i> Seleccionar archivo</label>
+          <input type="file" id="mediaFile" class="input-field">
+          <p class="input-hint">Seleccione el archivo que desea enviar</p>
+        </div>
+        
+        <!-- Campo oculto para URL o base64 (mantiene la funcionalidad pero no es visible) -->
+        <div class="hidden">
+          <input type="text" id="media" class="input-field">
+        </div>
+        
+        <div class="form-group">
+          <label for="fileName"><i class="fas fa-file-signature"></i> Nombre del Archivo</label>
+          <input type="text" id="fileName" class="input-field" placeholder="mi_archivo.jpg">
+        </div>
+        
+        <div class="form-group">
+          <label for="caption"><i class="fas fa-comment"></i> Leyenda (opcional)</label>
+          <textarea id="caption" class="textarea-field" placeholder="Escriba una descripción para el medio"></textarea>
+        </div>
+        
+        <div class="media-preview" id="media-preview">
+          <p><i class="fas fa-eye"></i> Vista previa del archivo:</p>
+          <div id="preview-content"></div>
+        </div>
+        
+        <div class="actions">
+          <button id="send-media-btn" class="btn btn-secondary" onclick="enviarMedios()">
+            <i class="fas fa-photo-video"></i> Enviar Medios
+          </button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Resultados -->
+    <div class="results-container">
+      <div class="results-header">
+        <h2 class="results-title"><i class="fas fa-list-alt"></i> Resultados del Envío</h2>
+        <button class="btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="clearResults()">
+          <i class="fas fa-trash"></i> Limpiar
+        </button>
+      </div>
+      <div class="results-content" id="resultados">
+        <span style="color: #94a3b8;">// Los resultados de sus envíos aparecerán aquí</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="mensajes.js"></script>
+</body>
+</html>
