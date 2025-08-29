@@ -55,26 +55,11 @@
           <p class="input-hint">Separe los números con comas. Incluya el código de país</p>
         </div>
         
-        <div class="form-row">
-          <div class="form-group">
-            <label for="mediatype"><i class="fas fa-file"></i> Tipo de Medio</label>
-            <select id="mediatype" class="select-field">
-              <option value="image">Imagen</option>
-              <option value="video">Video</option>
-              <option value="document">Documento</option>
-            </select>
-          </div>
-          
-          <div class="form-group">
-            <label for="mimetype"><i class="fas fa-code"></i> Tipo MIME</label>
-            <select id="mimetype" class="select-field">
-              <option value="image/jpeg">image/jpeg (JPEG)</option>
-              <option value="image/png">image/png (PNG)</option>
-              <option value="image/gif">image/gif (GIF)</option>
-              <option value="video/mp4">video/mp4 (MP4)</option>
-              <option value="application/pdf">application/pdf (PDF)</option>
-              <option value="application/msword">application/msword (DOC)</option>
-            </select>
+        <!-- Detección automática de tipo -->
+        <div class="form-group">
+          <label for="autoType"><i class="fas fa-info-circle"></i> Tipo detectado</label>
+          <div id="autoType" class="type-display">
+            <span class="type-placeholder">Seleccione un archivo para detectar automáticamente</span>
           </div>
         </div>
         

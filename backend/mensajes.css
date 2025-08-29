@@ -268,6 +268,52 @@ label i {
   display: none;
 }
 
+/* Nuevos estilos para la detección automática */
+.type-display {
+  padding: 0.9rem 1rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+}
+
+.type-placeholder {
+  color: var(--secondary);
+  font-style: italic;
+}
+
+.type-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-right: 0.8rem;
+}
+
+.type-badge.media {
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--primary);
+}
+
+.type-badge.mime {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.type-badge i {
+  margin-right: 0.3rem;
+  font-size: 0.8rem;
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 1.5rem;
