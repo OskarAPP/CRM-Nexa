@@ -3,6 +3,34 @@ let allContacts = [];
 let filteredContacts = [];
 let currentFilter = 'all';
 
+// Mapeo de códigos de país a banderas (usando flag-icons)
+const countryCodeToFlag = {
+  '1': 'us',    // Estados Unidos
+  '52': 'mx',   // México
+  '34': 'es',   // España
+  '54': 'ar',   // Argentina
+  '55': 'br',   // Brasil
+  '56': 'cl',   // Chile
+  '57': 'co',   // Colombia
+  '58': 've',   // Venezuela
+  '51': 'pe',   // Perú
+  '593': 'ec',  // Ecuador
+  '591': 'bo',  // Bolivia
+  '598': 'uy',  // Uruguay
+  '595': 'py',  // Paraguay
+  '507': 'pa',  // Panamá
+  '506': 'cr',  // Costa Rica
+  '503': 'sv',  // El Salvador
+  '502': 'gt',  // Guatemala
+  '504': 'hn',  // Honduras
+  '505': 'ni',  // Nicaragua
+  '53': 'cu',   // Cuba
+  '509': 'ht',  // Haití
+  '1809': 'do', // República Dominicana
+  '1829': 'do', // República Dominicana
+  '1849': 'do'  // República Dominicana
+};
+
 async function findContacts() {
   const container = document.getElementById("contacts");
   container.innerHTML = `
@@ -46,6 +74,66 @@ async function findContacts() {
   }
 }
 
+function formatPhoneNumber(number) {
+  // Eliminar el código de país para el formato
+  const cleanNumber = number.replace(/^\+?(\d+)/, '$1');
+  const countryCode = cleanNumber.substring(0, 3);
+  const mainNumber = cleanNumber.substring(3);
+  
+  // Formatear según la longitud del número
+  if (mainNumber.length === 10) {
+    return `+${countryCode} ${mainNumber.substring(0, 3)}-${mainNumber.substring(3, 6)}-${mainNumber.substring(6)}`;
+  } else if (mainNumber.length === 8) {
+    return `+${countryCode} ${mainNumber.substring(0, 4)}-${mainNumber.substring(4)}`;
+  }
+  
+  // Si no coincide con los formatos comunes, devolver el número original
+  return `+${cleanNumber}`;
+}
+
+function getCountryFlag(countryCode) {
+  return countryCodeToFlag[countryCode] || 'question';
+}
+
+function getCountryName(countryCode) {
+  const countryNames = {
+    'mx': 'México',
+    'us': 'Estados Unidos',
+    'es': 'España',
+    'ar': 'Argentina',
+    'br': 'Brasil',
+    'cl': 'Chile',
+    'co': 'Colombia',
+    've': 'Venezuela',
+    'pe': 'Perú',
+    'ec': 'Ecuador',
+    'bo': 'Bolivia',
+    'uy': 'Uruguay',
+    'py': 'Paraguay',
+    'pa': 'Panamá',
+    'cr': 'Costa Rica',
+    'sv': 'El Salvador',
+    'gt': 'Guatemala',
+    'hn': 'Honduras',
+    'ni': 'Nicaragua',
+    'cu': 'Cuba',
+    'ht': 'Haití',
+    'do': 'República Dominicana'
+  };
+  return countryNames[countryCode] || `Código ${countryCode}`;
+}
+
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
 function renderContacts() {
   const container = document.getElementById("contacts");
   const countElement = document.getElementById("count");
@@ -65,6 +153,17 @@ function renderContacts() {
       const isGroup = jid.includes("g.us");
       const type = isGroup ? "group" : "contact";
       const typeText = isGroup ? "Grupo" : "Contacto";
+      
+      // Extraer código de país y formatear número
+      let countryCode = '';
+      let formattedNumber = number;
+      let flagCode = 'question';
+      
+      if (number && number.length > 3) {
+        countryCode = number.substring(0, 3);
+        formattedNumber = formatPhoneNumber(number);
+        flagCode = getCountryFlag(countryCode);
+      }
       
       const card = document.createElement("div");
       card.className = `contact-card ${type}`;
@@ -97,7 +196,17 @@ function renderContacts() {
           <span class="contact-type type-${type}">${typeText}</span>
         </div>
         <h3 class="contact-name">${name}</h3>
-        <p class="contact-number">+${number}</p>
+        <p class="contact-number">
+          ${flagCode !== 'question' ? 
+            `<span class="fi fi-${flagCode} country-flag" title="${getCountryName(flagCode)}"></span>` : 
+            '<i class="fas fa-question-circle" style="color: #94a3b8;"></i>'
+          }
+          ${formattedNumber}
+        </p>
+        <div class="contact-meta">
+          <span>Creado: ${formatDate(contact.createdAt)}</span>
+          <span>Actualizado: ${formatDate(contact.updatedAt)}</span>
+        </div>
       `;
       card.appendChild(info);
       
