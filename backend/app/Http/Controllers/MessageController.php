@@ -19,8 +19,6 @@ class MessageController extends Controller
 
         $client = new Client();
         $apiUrl = 'https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendText/Chalino';
-
-        // <-- API Key directamente en el código
         $apiKey = '5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA';
 
         $resultados = [];
@@ -37,7 +35,7 @@ class MessageController extends Controller
                 $response = $client->post($apiUrl, [
                     'headers' => [
                         'Content-Type' => 'application/json',
-                        'apikey' => $apiKey  // usando la cabecera que pide Evolution API
+                        'apikey' => $apiKey
                     ],
                     'json' => $data
                 ]);
@@ -50,6 +48,71 @@ class MessageController extends Controller
                     'status' => $body['status'] ?? 'UNKNOWN',
                     'id' => $body['key']['id'] ?? null,
                     'http_code' => $statusCode
+                ];
+
+            } catch (\Exception $e) {
+                $resultados[] = [
+                    'numero' => $numero,
+                    'status' => 'ERROR',
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return response()->json($resultados);
+    }
+
+    // Método modificado para enviar medios a múltiples contactos
+    public function sendMedia(Request $request)
+    {
+        $request->validate([
+            'numeros' => 'required|array',
+            'mediatype' => 'required|string',   // image, video, document
+            'mimetype' => 'required|string',    // ejemplo: image/png
+            'media' => 'required|string',       // URL o base64
+            'fileName' => 'required|string',
+            'caption' => 'nullable|string',
+            'delay' => 'nullable|integer',
+            'linkPreview' => 'nullable|boolean'
+        ]);
+
+        $numeros = $request->numeros;
+        $client = new Client();
+        $apiUrl = 'https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendMedia/Chalino';
+        $apiKey = '5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA';
+
+        $resultados = [];
+
+        foreach ($numeros as $numero) {
+            $data = [
+                'number' => $numero,
+                'mediatype' => $request->mediatype,
+                'mimetype' => $request->mimetype,
+                'media' => $request->media,
+                'fileName' => $request->fileName,
+                'caption' => $request->caption ?? '',
+                'delay' => $request->delay ?? 0,
+                'linkPreview' => $request->linkPreview ?? false
+            ];
+
+            try {
+                $response = $client->post($apiUrl, [
+                    'headers' => [
+                        'Content-Type' => 'application/json',
+                        'apikey' => $apiKey
+                    ],
+                    'json' => $data
+                ]);
+
+                $body = json_decode($response->getBody(), true);
+                $statusCode = $response->getStatusCode();
+
+                $resultados[] = [
+                    'numero' => $numero,
+                    'status' => $body['status'] ?? 'UNKNOWN',
+                    'id' => $body['key']['id'] ?? null,
+                    'http_code' => $statusCode,
+                    'message' => $body['message'] ?? null
                 ];
 
             } catch (\Exception $e) {

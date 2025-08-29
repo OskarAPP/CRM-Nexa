@@ -17,6 +17,7 @@
       --error: #ef4444;
       --card-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
       --transition: all 0.3s ease;
+      --radius: 12px;
     }
     
     * {
@@ -80,45 +81,82 @@
     
     .message-container {
       background: white;
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 2rem;
       box-shadow: var(--card-shadow);
       margin-bottom: 2rem;
+    }
+    
+    .tabs {
+      display: flex;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    
+    .tab {
+      padding: 0.8rem 1.5rem;
+      cursor: pointer;
+      font-weight: 500;
+      color: var(--secondary);
+      border-bottom: 3px solid transparent;
+      transition: var(--transition);
+    }
+    
+    .tab.active {
+      color: var(--primary);
+      border-bottom: 3px solid var(--primary);
+    }
+    
+    .tab:hover {
+      color: var(--primary-dark);
+    }
+    
+    .tab-content {
+      display: none;
+    }
+    
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
     }
     
     .form-group {
       margin-bottom: 1.5rem;
     }
     
-    .form-group label {
+    label {
       display: block;
-      font-weight: 500;
       margin-bottom: 0.5rem;
+      font-weight: 500;
       color: var(--dark);
       display: flex;
       align-items: center;
     }
     
-    .form-group label i {
+    label i {
       margin-right: 0.5rem;
       color: var(--primary);
     }
     
-    .input-field, .textarea-field {
+    .input-field, .textarea-field, .select-field {
       width: 100%;
-      padding: 0.9rem 1.2rem;
+      padding: 0.9rem 1rem;
       border: 1px solid #cbd5e1;
-      border-radius: 12px;
+      border-radius: 8px;
       font-size: 1rem;
       transition: var(--transition);
-      background: #f8fafc;
+      background: white;
     }
     
-    .input-field:focus, .textarea-field:focus {
+    .input-field:focus, .textarea-field:focus, .select-field:focus {
       outline: none;
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-      background: white;
     }
     
     .textarea-field {
@@ -129,13 +167,13 @@
     .input-hint {
       font-size: 0.85rem;
       color: var(--secondary);
-      margin-top: 0.4rem;
+      margin-top: 0.5rem;
     }
     
     .actions {
       display: flex;
       justify-content: flex-end;
-      margin-top: 2rem;
+      margin-top: 1.5rem;
     }
     
     .btn {
@@ -146,7 +184,7 @@
       background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
       color: white;
       border: none;
-      border-radius: 12px;
+      border-radius: 8px;
       font-size: 1rem;
       font-weight: 500;
       cursor: pointer;
@@ -159,38 +197,38 @@
       box-shadow: 0 6px 12px rgba(37, 99, 235, 0.25);
     }
     
-    .btn:active {
-      transform: translateY(0);
-    }
-    
     .btn i {
       margin-right: 0.5rem;
     }
     
-    .btn-loading {
-      position: relative;
-      color: transparent;
+    .btn-secondary {
+      background: linear-gradient(135deg, var(--success) 0%, #0da371 100%);
+      box-shadow: 0 4px 6px rgba(16, 185, 129, 0.2);
     }
     
-    .btn-loading::after {
-      content: "";
-      position: absolute;
-      width: 20px;
-      height: 20px;
-      border: 2px solid transparent;
-      border-top-color: white;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
+    .btn-secondary:hover {
+      box-shadow: 0 6px 12px rgba(16, 185, 129, 0.25);
     }
     
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    .media-preview {
+      margin-top: 1.5rem;
+      padding: 1rem;
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      text-align: center;
+      background: #f8fafc;
+    }
+    
+    .media-preview img, .media-preview video {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 4px;
+      margin-top: 0.5rem;
     }
     
     .results-container {
       background: white;
-      border-radius: 16px;
+      border-radius: var(--radius);
       padding: 2rem;
       box-shadow: var(--card-shadow);
     }
@@ -218,68 +256,24 @@
     }
     
     .results-content {
+      font-family: 'Fira Code', monospace;
+      font-size: 0.9rem;
       background: #1e293b;
       color: #10b981;
-      border-radius: 12px;
       padding: 1.5rem;
-      font-family: 'Fira Code', monospace;
-      font-size: 0.85rem;
+      border-radius: 8px;
       overflow-x: auto;
-      min-height: 200px;
-      max-height: 400px;
-      overflow-y: auto;
+      white-space: pre-wrap;
     }
     
-    .status-indicators {
-      display: flex;
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
       gap: 1rem;
-      margin-top: 1rem;
     }
     
-    .status-item {
-      display: flex;
-      align-items: center;
-      font-size: 0.9rem;
-    }
-    
-    .status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      margin-right: 0.5rem;
-    }
-    
-    .status-pending {
-      background-color: var(--warning);
-    }
-    
-    .status-success {
-      background-color: var(--success);
-    }
-    
-    .status-error {
-      background-color: var(--error);
-    }
-    
-    .recipients-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 1rem;
-    }
-    
-    .recipient-tag {
-      background: #f1f5f9;
-      padding: 0.4rem 0.8rem;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      display: flex;
-      align-items: center;
-    }
-    
-    .recipient-tag i {
-      margin-right: 0.3rem;
-      color: var(--primary);
+    .hidden {
+      display: none;
     }
     
     @media (max-width: 768px) {
@@ -287,16 +281,20 @@
         padding: 1.5rem;
       }
       
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+      
       h1 {
         font-size: 1.8rem;
       }
       
-      .actions {
-        justify-content: center;
+      .tabs {
+        flex-direction: column;
       }
       
-      .btn {
-        width: 100%;
+      .tab {
+        text-align: center;
       }
     }
   </style>
@@ -308,80 +306,191 @@
         <i class="fas fa-comment-dots"></i>
       </div>
       <h1>Business Message Manager</h1>
-      <p class="subtitle">Envíe mensajes profesionales a sus contactos de WhatsApp</p>
+      <p class="subtitle">Envíe mensajes y medios a sus contactos de WhatsApp de forma profesional</p>
     </header>
     
     <div class="message-container">
-      <div class="form-group">
-        <label for="numeros"><i class="fas fa-phone"></i> Números de destino</label>
-        <input type="text" id="numeros" class="input-field" value="5219961122642,5219821295240" placeholder="Ingrese números separados por comas">
-        <p class="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
+      <div class="tabs">
+        <div class="tab active" data-tab="texto">
+          <i class="fas fa-font"></i> Mensaje de Texto
+        </div>
+        <div class="tab" data-tab="media">
+          <i class="fas fa-photo-video"></i> Medios
+        </div>
       </div>
       
-      <div class="form-group">
-        <label for="mensaje"><i class="fas fa-envelope"></i> Mensaje</label>
-        <textarea id="mensaje" class="textarea-field" placeholder="Escriba su mensaje aquí">Hola 👋 este es un mensaje de prueba</textarea>
-        <p class="input-hint">Puede incluir emojis y formato básico. Máximo 4096 caracteres.</p>
+      <!-- Pestaña de Texto -->
+      <div class="tab-content active" id="texto-tab">
+        <div class="form-group">
+          <label for="numeros"><i class="fas fa-phone"></i> Números de destino</label>
+          <input type="text" id="numeros" class="input-field" value="5219961122642,5219821295240" placeholder="Ingrese números separados por comas">
+          <p class="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="mensaje"><i class="fas fa-envelope"></i> Mensaje</label>
+          <textarea id="mensaje" class="textarea-field" placeholder="Escriba su mensaje aquí">Hola 👋 este es un mensaje de prueba</textarea>
+        </div>
+        
+        <div class="actions">
+          <button id="send-btn" class="btn" onclick="enviarMensajes()">
+            <i class="fas fa-paper-plane"></i> Enviar Mensajes
+          </button>
+        </div>
       </div>
       
-      <div class="actions">
-        <button id="send-btn" class="btn" onclick="enviarMensajes()">
-          <i class="fas fa-paper-plane"></i> Enviar Mensajes
-        </button>
+      <!-- Pestaña de Medios -->
+      <div class="tab-content" id="media-tab">
+        <div class="form-group">
+          <label for="media-numeros"><i class="fas fa-phone"></i> Números de destino</label>
+          <input type="text" id="media-numeros" class="input-field" value="5219961122642,5219821295240" placeholder="Ingrese números separados por comas">
+          <p class="input-hint">Separe los números con comas. Incluya el código de país</p>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mediatype"><i class="fas fa-file"></i> Tipo de Medio</label>
+            <select id="mediatype" class="select-field">
+              <option value="image">Imagen</option>
+              <option value="video">Video</option>
+              <option value="document">Documento</option>
+            </select>
+          </div>
+          
+          <div class="form-group">
+            <label for="mimetype"><i class="fas fa-code"></i> Tipo MIME</label>
+            <select id="mimetype" class="select-field">
+              <option value="image/jpeg">image/jpeg (JPEG)</option>
+              <option value="image/png">image/png (PNG)</option>
+              <option value="image/gif">image/gif (GIF)</option>
+              <option value="video/mp4">video/mp4 (MP4)</option>
+              <option value="application/pdf">application/pdf (PDF)</option>
+              <option value="application/msword">application/msword (DOC)</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Input para subir archivo -->
+        <div class="form-group">
+          <label for="mediaFile"><i class="fas fa-upload"></i> Seleccionar archivo</label>
+          <input type="file" id="mediaFile" class="input-field">
+          <p class="input-hint">Seleccione el archivo que desea enviar</p>
+        </div>
+        
+        <!-- Campo oculto para URL o base64 (mantiene la funcionalidad pero no es visible) -->
+        <div class="hidden">
+          <input type="text" id="media" class="input-field">
+        </div>
+        
+        <div class="form-group">
+          <label for="fileName"><i class="fas fa-file-signature"></i> Nombre del Archivo</label>
+          <input type="text" id="fileName" class="input-field" placeholder="mi_archivo.jpg">
+        </div>
+        
+        <div class="form-group">
+          <label for="caption"><i class="fas fa-comment"></i> Leyenda (opcional)</label>
+          <textarea id="caption" class="textarea-field" placeholder="Escriba una descripción para el medio"></textarea>
+        </div>
+        
+        <div class="media-preview" id="media-preview">
+          <p><i class="fas fa-eye"></i> Vista previa del archivo:</p>
+          <div id="preview-content"></div>
+        </div>
+        
+        <div class="actions">
+          <button id="send-media-btn" class="btn btn-secondary" onclick="enviarMedios()">
+            <i class="fas fa-photo-video"></i> Enviar Medios
+          </button>
+        </div>
       </div>
     </div>
     
+    <!-- Resultados -->
     <div class="results-container">
       <div class="results-header">
         <h2 class="results-title"><i class="fas fa-list-alt"></i> Resultados del Envío</h2>
-        <div class="status-indicators">
-          <div class="status-item">
-            <span class="status-dot status-pending"></span>
-            <span>Pendiente</span>
-          </div>
-          <div class="status-item">
-            <span class="status-dot status-success"></span>
-            <span>Éxito</span>
-          </div>
-          <div class="status-item">
-            <span class="status-dot status-error"></span>
-            <span>Error</span>
-          </div>
-        </div>
+        <button class="btn" style="padding: 0.5rem 1rem; font-size: 0.9rem;" onclick="clearResults()">
+          <i class="fas fa-trash"></i> Limpiar
+        </button>
       </div>
-      
-      <div class="recipients-list" id="recipients-list">
-        <div class="recipient-tag">
-          <i class="fas fa-user"></i> 2 destinatarios
-        </div>
-      </div>
-      
       <div class="results-content" id="resultados">
-        {/* Los resultados se mostrarán aquí */}
+        <span style="color: #94a3b8;">// Los resultados de sus envíos aparecerán aquí</span>
       </div>
     </div>
   </div>
 
   <script>
+    // --- Tabs ---
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`${tab.dataset.tab}-tab`).classList.add('active');
+      });
+    });
+
+    // --- Convertir archivo a base64 y mostrar vista previa ---
+    document.getElementById('mediaFile').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function() {
+        // reader.result trae: "data:mime/type;base64,AAAA..."
+        const base64 = reader.result.split(',')[1];
+        document.getElementById('media').value = base64;
+        document.getElementById('fileName').value = file.name;
+        
+        // Mostrar vista previa
+        const previewContent = document.getElementById('preview-content');
+        const mediatype = document.getElementById('mediatype').value;
+        
+        previewContent.innerHTML = '';
+        
+        if (mediatype === 'image') {
+          const img = document.createElement('img');
+          img.src = reader.result;
+          previewContent.appendChild(img);
+        } else if (mediatype === 'video') {
+          const video = document.createElement('video');
+          video.src = reader.result;
+          video.controls = true;
+          previewContent.appendChild(video);
+        } else {
+          previewContent.innerHTML = `<p><i class="fas fa-file"></i> ${file.name} (${file.type})</p>`;
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Actualizar vista previa cuando cambie el tipo de medio
+    document.getElementById('mediatype').addEventListener('change', function() {
+      const mediaValue = document.getElementById('media').value;
+      if (mediaValue) {
+        // Disparar evento change para regenerar vista previa
+        document.getElementById('mediaFile').dispatchEvent(new Event('change'));
+      }
+    });
+
+    // --- Enviar textos ---
     async function enviarMensajes() {
       const numeros = document.getElementById('numeros').value.split(',').map(n => n.trim());
       const mensaje = document.getElementById('mensaje').value;
-      const sendBtn = document.getElementById('send-btn');
       const resultados = document.getElementById('resultados');
-      const recipientsList = document.getElementById('recipients-list');
       
-      // Actualizar UI para estado de carga
-      sendBtn.classList.add('btn-loading');
+      // Validación básica
+      if (!numeros.length || numeros.some(n => !n)) {
+        resultados.textContent = "Error: Debe ingresar al menos un número válido";
+        return;
+      }
+      
+      if (!mensaje.trim()) {
+        resultados.textContent = "Error: El mensaje no puede estar vacío";
+        return;
+      }
+      
       resultados.textContent = "Enviando mensajes...";
-      
-      // Mostrar destinatarios
-      recipientsList.innerHTML = '';
-      numeros.forEach(numero => {
-        const tag = document.createElement('div');
-        tag.className = 'recipient-tag';
-        tag.innerHTML = `<i class="fas fa-user"></i> ${numero}`;
-        recipientsList.appendChild(tag);
-      });
       
       try {
         const response = await fetch('http://127.0.0.1:8000/api/send-message', {
@@ -389,38 +498,61 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ numeros, mensaje })
         });
-
-        const text = await response.text();
-        console.log("Respuesta RAW:", text);
-
-        try {
-          const data = JSON.parse(text);
-          resultados.textContent = JSON.stringify(data, null, 2);
-          
-          // Cambiar color según el resultado
-          if (response.ok) {
-            resultados.style.color = '#10b981'; // Verde para éxito
-          } else {
-            resultados.style.color = '#ef4444'; // Rojo para error
-          }
-        } catch (e) {
-          resultados.textContent = "Error al parsear JSON: " + e.message;
-          resultados.style.color = '#ef4444';
-        }
+        const data = await response.json();
+        resultados.textContent = JSON.stringify(data, null, 2);
       } catch (error) {
-        resultados.textContent = "Error de conexión: " + error.message;
-        resultados.style.color = '#ef4444';
-      } finally {
-        sendBtn.classList.remove('btn-loading');
+        resultados.textContent = "Error: " + error.message;
+      }
+    }
+
+    // --- Enviar medios ---
+    async function enviarMedios() {
+      const numeros = document.getElementById('media-numeros').value.split(',').map(n => n.trim());
+      const mediatype = document.getElementById('mediatype').value;
+      const mimetype = document.getElementById('mimetype').value;
+      const media = document.getElementById('media').value;
+      const fileName = document.getElementById('fileName').value;
+      const caption = document.getElementById('caption').value;
+      const resultados = document.getElementById('resultados');
+      
+      // Validación básica
+      if (!numeros.length || numeros.some(n => !n)) {
+        resultados.textContent = "Error: Debe ingresar al menos un número válido";
+        return;
+      }
+      
+      if (!media.trim()) {
+        resultados.textContent = "Error: Debe seleccionar un archivo para enviar";
+        return;
+      }
+      
+      if (!fileName.trim()) {
+        resultados.textContent = "Error: Debe proporcionar un nombre de archivo";
+        return;
+      }
+      
+      resultados.textContent = "Enviando medios...";
+
+      try {
+        const response = await fetch('http://127.0.0.1:8000/api/send-media', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            numeros, mediatype, mimetype, media, fileName, caption,
+            delay: 1000, linkPreview: false
+          })
+        });
+        const data = await response.json();
+        resultados.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        resultados.textContent = "Error: " + error.message;
       }
     }
     
-    // Mejorar la experiencia de usuario con validación básica
-    document.getElementById('numeros').addEventListener('blur', function(e) {
-      const value = e.target.value;
-      const numbers = value.split(',').map(n => n.trim()).filter(n => n);
-      e.target.value = numbers.join(', ');
-    });
+    // Limpiar resultados
+    function clearResults() {
+      document.getElementById('resultados').textContent = '';
+    }
   </script>
 </body>
 </html>
