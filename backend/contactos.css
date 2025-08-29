@@ -117,7 +117,7 @@ h1 {
 .filter-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2.5rem;
   gap: 0.8rem;
   flex-wrap: wrap;
 }
@@ -152,31 +152,6 @@ h1 {
 
 .filter-btn.active:hover {
   background: var(--primary-dark);
-}
-
-.lada-filter-container {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 1.5rem;
-  gap: 0.8rem;
-  flex-wrap: wrap;
-}
-
-.lada-select {
-  padding: 0.6rem 1.2rem;
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: var(--transition);
-  min-width: 200px;
-}
-
-.lada-select:focus {
-  outline: none;
-  border-color: var(--primary);
 }
 
 .contacts-container {
@@ -350,16 +325,6 @@ h1 {
   text-overflow: ellipsis;
 }
 
-.contact-lada {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  display: inline-block;
-  margin-left: 0.5rem;
-  background-color: rgba(37, 99, 235, 0.1);
-  color: var(--primary);
-}
-
 .contact-actions {
   margin-left: 0.5rem;
 }
@@ -479,11 +444,6 @@ h1 {
   }
   
   .btn {
-    width: 100%;
-    max-width: 300px;
-  }
-  
-  .lada-select {
     width: 100%;
     max-width: 300px;
   }

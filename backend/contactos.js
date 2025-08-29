@@ -2,55 +2,6 @@
 let allContacts = [];
 let filteredContacts = [];
 let currentFilter = 'all';
-let currentLadaFilter = 'all';
-
-// Función para extraer la lada de un número
-function extractLada(remoteJid) {
-  if (!remoteJid) return '';
-  
-  // Extraer el número del JID (eliminar @s.whatsapp.net)
-  const numberPart = remoteJid.split('@')[0];
-  
-  // Identificar números mexicanos (código de país 52)
-  if (numberPart.startsWith('52')) {
-    // Número mexicano: +52XXXXXXXXXX
-    const fullNumber = numberPart.substring(2); // Quitar el 52
-    
-    // Determinar la lada basada en la longitud
-    if (fullNumber.length >= 10) {
-      // Números con lada de 2 dígitos (ej. 55, 33, 81)
-      if (fullNumber.startsWith('1') || fullNumber.startsWith('55') || 
-          fullNumber.startsWith('33') || fullNumber.startsWith('81')) {
-        return '52-' + fullNumber.substring(0, 2);
-      }
-      // Números con lada de 3 dígitos (ej. 222, 229, 461, 477, 449, 664)
-      else if (fullNumber.startsWith('222') || fullNumber.startsWith('229') || 
-              fullNumber.startsWith('461') || fullNumber.startsWith('477') || 
-              fullNumber.startsWith('449') || fullNumber.startsWith('664') ||
-              fullNumber.startsWith('981')){
-        return '52-' + fullNumber.substring(0, 3);
-      }
-    }
-    
-    return '52'; // Solo código de país si no se identifica lada específica
-  }
-  
-  // Identificar otros países
-  if (numberPart.startsWith('1')) return '1'; // USA/Canada
-  if (numberPart.startsWith('34')) return '34'; // España
-  if (numberPart.startsWith('54')) return '54'; // Argentina
-  if (numberPart.startsWith('55')) return '55'; // Brasil
-  if (numberPart.startsWith('56')) return '56'; // Chile
-  if (numberPart.startsWith('57')) return '57'; // Colombia
-  if (numberPart.startsWith('58')) return '58'; // Venezuela
-  
-  // Para otros países, devolver los primeros 2-3 dígitos
-  if (numberPart.length > 3) {
-    return numberPart.substring(0, 3);
-  }
-  
-  return numberPart;
-}
 
 async function findContacts() {
   const container = document.getElementById("contacts");
@@ -109,7 +60,6 @@ function renderContacts() {
       const number = jid.split("@")[0] || "N/A";
       const pic = contact.profilePicUrl;
       const initials = name.charAt(0).toUpperCase() || "?";
-      const lada = extractLada(jid);
       
       // Determinar si es contacto o grupo
       const isGroup = jid.includes("g.us");
@@ -142,13 +92,9 @@ function renderContacts() {
       const info = document.createElement("div");
       info.className = "contact-info";
       
-      // Mostrar lada si está disponible
-      const ladaBadge = lada ? `<span class="contact-lada">+${lada}</span>` : '';
-      
       info.innerHTML = `
         <div>
           <span class="contact-type type-${type}">${typeText}</span>
-          ${ladaBadge}
         </div>
         <h3 class="contact-name">${name}</h3>
         <p class="contact-number">+${number}</p>
@@ -210,16 +156,8 @@ function filterContacts(type) {
   applyFilters();
 }
 
-function filterByLada() {
-  const ladaSelect = document.getElementById('lada-filter');
-  currentLadaFilter = ladaSelect.value;
-  
-  // Aplicar filtro
-  applyFilters();
-}
-
 function applyFilters() {
-  // Primero aplicar filtro de tipo (contacto/grupo)
+  // Aplicar filtro de tipo (contacto/grupo)
   if (currentFilter === 'all') {
     filteredContacts = [...allContacts];
   } else if (currentFilter === 'contact') {
@@ -232,36 +170,18 @@ function applyFilters() {
     );
   }
   
-  // Luego aplicar filtro de lada
-  if (currentLadaFilter !== 'all') {
-    filteredContacts = filteredContacts.filter(contact => {
-      const lada = extractLada(contact.remoteJid);
-      
-      if (currentLadaFilter === 'mexico') {
-        return lada.startsWith('52');
-      } else if (currentLadaFilter === 'international') {
-        return !lada.startsWith('52');
-      } else {
-        return lada === currentLadaFilter;
-      }
-    });
-  }
-  
   renderContacts();
 }
 
 function clearFilters() {
   // Restablecer filtros
   currentFilter = 'all';
-  currentLadaFilter = 'all';
   
   // Actualizar UI
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.classList.remove('active');
   });
   document.querySelector(`.filter-btn[onclick="filterContacts('all')"]`).classList.add('active');
-  
-  document.getElementById('lada-filter').value = 'all';
   
   // Aplicar filtros
   applyFilters();
