@@ -2,10 +2,7 @@
 let allContacts = [];
 let filteredContacts = [];
 let currentFilter = 'all';
-let advancedFilters = {
-  countryCode: '521',
-  areaCode: null
-};
+let activeAreaCodes = [];
 
 // Mapeo de códigos de país a banderas (usando flag-icons)
 const countryCodeToFlag = {
@@ -76,10 +73,55 @@ async function findContacts() {
   }
 }
 
+// Función para procesar múltiples códigos de área
+function parseAreaCodes(areaCodesString) {
+  if (!areaCodesString.trim()) return [];
+  
+  return areaCodesString
+    .split(',')
+    .map(code => code.trim())
+    .filter(code => code !== '' && /^\d+$/.test(code));
+}
+
+// Función para mostrar chips de códigos de área activos
+function renderAreaChips() {
+  const chipsContainer = document.getElementById('areaChipsContainer');
+  if (!chipsContainer) return;
+  
+  if (activeAreaCodes.length === 0) {
+    chipsContainer.style.display = 'none';
+    return;
+  }
+  
+  chipsContainer.style.display = 'block';
+  chipsContainer.innerHTML = activeAreaCodes.map(code => `
+    <div class="area-chip">
+      ${code}
+      <button class="remove-chip" onclick="removeAreaCode('${code}')">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  `).join('');
+}
+
+// Función para remover un código de área específico
+function removeAreaCode(code) {
+  activeAreaCodes = activeAreaCodes.filter(c => c !== code);
+  renderAreaChips();
+  
+  // Si no hay más códigos, limpiar el input
+  if (activeAreaCodes.length === 0) {
+    document.getElementById('areaCodes').value = '';
+  } else {
+    // Actualizar el input con los códigos restantes
+    document.getElementById('areaCodes').value = activeAreaCodes.join(', ');
+  }
+}
+
 // Nueva función: Aplicar filtros avanzados
 async function applyAdvancedFilters() {
   const countryCode = document.getElementById('countryCode').value.trim();
-  const areaCode = document.getElementById('areaCode').value.trim();
+  const areaCodesString = document.getElementById('areaCodes').value.trim();
   
   // Validaciones básicas
   if (countryCode && !/^\d+$/.test(countryCode)) {
@@ -87,9 +129,23 @@ async function applyAdvancedFilters() {
     return;
   }
   
-  if (areaCode && !/^\d+$/.test(areaCode)) {
-    alert('El código de área debe contener solo dígitos');
-    return;
+  // Procesar múltiples códigos de área
+  const areaCodes = parseAreaCodes(areaCodesString);
+  
+  if (areaCodes.length > 0) {
+    // Validar cada código de área
+    const invalidCodes = areaCodes.filter(code => !/^\d+$/.test(code));
+    if (invalidCodes.length > 0) {
+      alert('Los códigos de área deben contener solo dígitos. Códigos inválidos: ' + invalidCodes.join(', '));
+      return;
+    }
+    
+    // Actualizar códigos activos
+    activeAreaCodes = [...new Set(areaCodes)]; // Eliminar duplicados
+    renderAreaChips();
+  } else {
+    activeAreaCodes = [];
+    renderAreaChips();
   }
   
   const container = document.getElementById("contacts");
@@ -97,14 +153,19 @@ async function applyAdvancedFilters() {
     <div class="loading">
       <i class="fas fa-filter fa-spin"></i>
       <h3>Aplicando filtros</h3>
-      <p>Filtrando contactos por código de país y área...</p>
+      <p>Filtrando contactos por código de país y áreas...</p>
     </div>
   `;
 
   try {
-    const filterData = {};
-    if (countryCode) filterData.country_code = countryCode;
-    if (areaCode) filterData.area_code = areaCode;
+    const filterData = {
+      country_code: countryCode || '521'
+    };
+    
+    // Si hay códigos de área, enviarlos como array
+    if (activeAreaCodes.length > 0) {
+      filterData.area_codes = activeAreaCodes;
+    }
 
     const response = await fetch("http://127.0.0.1:8000/api/filter-contacts", {
       method: "POST",
@@ -145,16 +206,14 @@ async function applyAdvancedFilters() {
 
 function showFilterInfo(data) {
   const countryCode = document.getElementById('countryCode').value.trim() || '521';
-  const areaCode = document.getElementById('areaCode').value.trim();
   
   let filterText = `Filtro: País ${countryCode}`;
-  if (areaCode) {
-    filterText += `, Área ${areaCode}`;
+  if (activeAreaCodes.length > 0) {
+    filterText += `, Áreas: ${activeAreaCodes.join(', ')}`;
   }
   
   filterText += ` | Encontrados: ${data.filtered_count} de ${data.total_jids_found}`;
   
-  // Puedes mostrar esta información en la interfaz si lo deseas
   console.log(filterText);
 }
 
@@ -163,11 +222,10 @@ function showEmptyStateWithFilter(data) {
   const countElement = document.getElementById("count");
   
   const countryCode = document.getElementById('countryCode').value.trim() || '521';
-  const areaCode = document.getElementById('areaCode').value.trim();
   
   let filterDetails = `Código de país: ${countryCode}`;
-  if (areaCode) {
-    filterDetails += `, Código de área: ${areaCode}`;
+  if (activeAreaCodes.length > 0) {
+    filterDetails += `, Códigos de área: ${activeAreaCodes.join(', ')}`;
   }
   
   container.innerHTML = `
@@ -370,7 +428,9 @@ function clearFilters() {
   
   // Limpiar filtros avanzados
   document.getElementById('countryCode').value = '521';
-  document.getElementById('areaCode').value = '';
+  document.getElementById('areaCodes').value = '';
+  activeAreaCodes = [];
+  renderAreaChips();
   
   // Actualizar UI
   document.querySelectorAll('.filter-btn').forEach(btn => {

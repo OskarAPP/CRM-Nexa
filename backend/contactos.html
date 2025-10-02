@@ -60,16 +60,16 @@
           </div>
           
           <div class="input-group">
-            <label for="areaCode">
-              <i class="fas fa-map-marker-alt"></i> Código de Área
+            <label for="areaCodes">
+              <i class="fas fa-map-marker-alt"></i> Códigos de Área
             </label>
             <input 
               type="text" 
-              id="areaCode" 
-              placeholder="Ej: 996 (Campeche)"
-              maxlength="5"
+              id="areaCodes" 
+              placeholder="Ej: 999,981,996 (separados por comas)"
+              maxlength="50"
             >
-            <small>Opcional - Ej: 996, 999, etc.</small>
+            <small>Múltiples códigos separados por comas: 999,981,996</small>
           </div>
           
           <button class="btn btn-filter" onclick="applyAdvancedFilters()">

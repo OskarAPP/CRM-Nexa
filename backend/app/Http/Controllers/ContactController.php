@@ -39,14 +39,14 @@ class ContactController extends Controller
     }
 
     /**
-     * Nuevo método: filtra contactos por country_code y area_code.
+     * Método mejorado: filtra contactos por country_code y múltiples area_codes.
      * - country_code por defecto = '521' (México) si no se envía.
-     * - area_code opcional (ej. '996' para Campeche).
+     * - area_codes opcional (array de códigos de área: ['999', '981', '996'])
      *
      * Request JSON esperado (ejemplo):
      * {
      *   "country_code": "521",
-     *   "area_code": "996"
+     *   "area_codes": ["999", "981", "996"]
      * }
      */
     public function filterContacts(Request $request)
@@ -57,14 +57,28 @@ class ContactController extends Controller
 
         // Por defecto usamos México (521) como pediste
         $country = $request->input('country_code', '521');
-        $area = $request->input('area_code', null);
+        $areaCodes = $request->input('area_codes', []);
 
         // Validaciones básicas
         if (!preg_match('/^\d+$/', (string)$country)) {
             return response()->json(['error' => true, 'message' => 'country_code debe contener sólo dígitos.'], 422);
         }
-        if ($area !== null && !preg_match('/^\d+$/', (string)$area)) {
-            return response()->json(['error' => true, 'message' => 'area_code debe contener sólo dígitos.'], 422);
+
+        // Validar que area_codes sea un array
+        if (!is_array($areaCodes)) {
+            // Si es un string, intentar convertirlo a array
+            if (is_string($areaCodes)) {
+                $areaCodes = array_map('trim', explode(',', $areaCodes));
+            } else {
+                $areaCodes = [];
+            }
+        }
+
+        // Validar cada código de área
+        foreach ($areaCodes as $area) {
+            if (!preg_match('/^\d+$/', (string)$area)) {
+                return response()->json(['error' => true, 'message' => 'Todos los area_codes deben contener sólo dígitos.'], 422);
+            }
         }
 
         try {
@@ -98,13 +112,21 @@ class ContactController extends Controller
                     continue;
                 }
 
-                if ($area !== null) {
-                    // comprobar que tras el country venga el area indicado
-                    if (strpos($afterCountry, (string)$area) !== 0) {
+                if (!empty($areaCodes)) {
+                    // comprobar que tras el country venga alguno de los area codes indicados
+                    $areaFound = null;
+                    foreach ($areaCodes as $area) {
+                        if (strpos($afterCountry, (string)$area) === 0) {
+                            $areaFound = (string)$area;
+                            break;
+                        }
+                    }
+                    
+                    if ($areaFound === null) {
                         continue;
                     }
-                    $areaFound = (string)$area;
-                    $local = substr($afterCountry, strlen((string)$area));
+                    
+                    $local = substr($afterCountry, strlen($areaFound));
                 } else {
                     // si no se pasó area, proponemos una "candidate" con los primeros 3 dígitos tras el country
                     $areaFound = substr($afterCountry, 0, 3);
@@ -127,6 +149,10 @@ class ContactController extends Controller
                 'error' => false,
                 'total_jids_found' => count($jids),
                 'filtered_count' => count($filtered),
+                'filters_applied' => [
+                    'country_code' => $country,
+                    'area_codes' => $areaCodes
+                ],
                 'filtered' => $filtered,
                 'matched_contacts' => array_values($matchedContacts) // objetos completos (si existen en la respuesta)
             ]);

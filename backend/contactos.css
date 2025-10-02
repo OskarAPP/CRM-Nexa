@@ -230,6 +230,42 @@ h1 {
   margin-top: 0.2rem;
 }
 
+/* Chips para mostrar códigos de área activos */
+.area-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.area-chip {
+  display: inline-flex;
+  align-items: center;
+  background: var(--primary);
+  color: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.area-chip .remove-chip {
+  background: none;
+  border: none;
+  color: white;
+  margin-left: 0.3rem;
+  cursor: pointer;
+  padding: 0.2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.area-chip .remove-chip:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .contacts-container {
   background: white;
   border-radius: 16px;
