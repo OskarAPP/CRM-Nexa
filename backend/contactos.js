@@ -3,6 +3,7 @@ let allContacts = [];
 let filteredContacts = [];
 let currentFilter = 'all';
 let activeAreaCodes = [];
+let selectedContacts = new Set(); // Nuevo: Set para contactos seleccionados
 
 // Mapeo de códigos de país a banderas (usando flag-icons)
 const countryCodeToFlag = {
@@ -56,6 +57,8 @@ async function findContacts() {
     if (Array.isArray(data) && data.length > 0) {
       allContacts = data;
       filteredContacts = [...allContacts];
+      selectedContacts.clear(); // Limpiar selección al cargar nuevos contactos
+      updateSelectionInfo();
       renderContacts();
     } else {
       showEmptyState();
@@ -72,6 +75,149 @@ async function findContacts() {
     document.getElementById("count").textContent = "Error";
   }
 }
+
+// Nuevo: Función para seleccionar/deseleccionar contacto
+function toggleContactSelection(contactId) {
+  if (selectedContacts.has(contactId)) {
+    selectedContacts.delete(contactId);
+  } else {
+    selectedContacts.add(contactId);
+  }
+  
+  updateSelectionInfo();
+  updateExportButton();
+}
+
+// Nuevo: Seleccionar todos los contactos visibles
+function selectAllContacts() {
+  filteredContacts.forEach(contact => {
+    const contactId = contact.remoteJid;
+    selectedContacts.add(contactId);
+  });
+  
+  updateSelectionInfo();
+  updateExportButton();
+  renderContacts(); // Re-renderizar para mostrar selección
+}
+
+// Nuevo: Deseleccionar todos los contactos
+function deselectAllContacts() {
+  selectedContacts.clear();
+  updateSelectionInfo();
+  updateExportButton();
+  renderContacts(); // Re-renderizar para quitar selección
+}
+
+// Nuevo: Actualizar información de selección
+function updateSelectionInfo() {
+  const selectionInfo = document.getElementById('selectionInfo');
+  const selectedCount = document.getElementById('selectedCount');
+  
+  if (selectedContacts.size > 0) {
+    selectionInfo.classList.add('show');
+    selectedCount.textContent = selectedContacts.size;
+  } else {
+    selectionInfo.classList.remove('show');
+  }
+}
+
+// Nuevo: Actualizar estado del botón de exportación
+function updateExportButton() {
+  const exportBtn = document.getElementById('exportBtn');
+  exportBtn.disabled = selectedContacts.size === 0;
+}
+
+// Nuevo: Exportar contactos seleccionados a CSV
+function exportSelectedContacts() {
+  if (selectedContacts.size === 0) return;
+  
+  const selectedContactData = allContacts.filter(contact => 
+    selectedContacts.has(contact.remoteJid)
+  );
+  
+  // Crear contenido CSV
+  let csvContent = "Nombre,Número,Tipo\n";
+  
+  selectedContactData.forEach(contact => {
+    const name = contact.pushName || "Sin nombre";
+    const jid = contact.remoteJid || "";
+    const number = jid.split("@")[0] || "N/A";
+    const isGroup = jid.includes("g.us");
+    const type = isGroup ? "Grupo" : "Contacto";
+    
+    // Escapar comas y comillas en el nombre
+    const escapedName = `"${name.replace(/"/g, '""')}"`;
+    
+    csvContent += `${escapedName},${number},${type}\n`;
+  });
+  
+  // Crear y descargar archivo
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  
+  link.setAttribute("href", url);
+  link.setAttribute("download", `contactos_seleccionados_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  // Mostrar mensaje de éxito
+  showExportSuccess(selectedContacts.size);
+}
+
+// Nuevo: Mostrar mensaje de exportación exitosa
+function showExportSuccess(count) {
+  // Crear notificación temporal
+  const notification = document.createElement('div');
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: var(--success);
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: var(--card-shadow);
+    z-index: 1000;
+    animation: slideIn 0.3s ease;
+  `;
+  
+  notification.innerHTML = `
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <i class="fas fa-check-circle"></i>
+      <span>${count} contactos exportados exitosamente</span>
+    </div>
+  `;
+  
+  document.body.appendChild(notification);
+  
+  // Remover después de 3 segundos
+  setTimeout(() => {
+    notification.style.animation = 'slideOut 0.3s ease';
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.parentNode.removeChild(notification);
+      }
+    }, 300);
+  }, 3000);
+}
+
+// Agregar estilos de animación para la notificación
+const style = document.createElement('style');
+style.textContent = `
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes slideOut {
+    from { transform: translateX(0); opacity: 1; }
+    to { transform: translateX(100%); opacity: 0; }
+  }
+`;
+document.head.appendChild(style);
 
 // Función para procesar múltiples códigos de área
 function parseAreaCodes(areaCodesString) {
@@ -185,6 +331,9 @@ async function applyAdvancedFilters() {
     if (data.matched_contacts && data.matched_contacts.length > 0) {
       allContacts = data.matched_contacts;
       filteredContacts = [...allContacts];
+      selectedContacts.clear(); // Limpiar selección al aplicar nuevos filtros
+      updateSelectionInfo();
+      updateExportButton();
       renderContacts();
       
       // Mostrar información del filtro aplicado
@@ -319,8 +468,28 @@ function renderContacts() {
         flagCode = getCountryFlag(countryCode);
       }
       
+      // Verificar si está seleccionado
+      const isSelected = selectedContacts.has(jid);
+      
       const card = document.createElement("div");
-      card.className = `contact-card ${type}`;
+      card.className = `contact-card ${type} ${isSelected ? 'selected' : ''}`;
+      card.onclick = (e) => {
+        // Evitar que el click en el checkbox active ambos eventos
+        if (!e.target.classList.contains('contact-checkbox')) {
+          toggleContactSelection(jid);
+          renderContacts(); // Re-renderizar para actualizar estado visual
+        }
+      };
+      
+      // Checkbox de selección
+      const checkbox = document.createElement("div");
+      checkbox.className = "contact-checkbox";
+      checkbox.onclick = (e) => {
+        e.stopPropagation(); // Evitar que el click se propague a la tarjeta
+        toggleContactSelection(jid);
+        renderContacts(); // Re-renderizar para actualizar estado visual
+      };
+      card.appendChild(checkbox);
       
       // Avatar con imagen o iniciales
       const avatar = document.createElement("div");
@@ -431,6 +600,11 @@ function clearFilters() {
   document.getElementById('areaCodes').value = '';
   activeAreaCodes = [];
   renderAreaChips();
+  
+  // Limpiar selección
+  selectedContacts.clear();
+  updateSelectionInfo();
+  updateExportButton();
   
   // Actualizar UI
   document.querySelectorAll('.filter-btn').forEach(btn => {

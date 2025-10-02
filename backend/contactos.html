@@ -25,6 +25,15 @@
       <button class="btn btn-outline" onclick="clearFilters()">
         <i class="fas fa-times"></i> Limpiar Filtros
       </button>
+      <!-- Nuevo: Botón de exportación -->
+      <button class="btn btn-export" onclick="exportSelectedContacts()" id="exportBtn" disabled>
+        <i class="fas fa-download"></i> Exportar Seleccionados
+      </button>
+    </div>
+
+    <!-- Nuevo: Contador de selección -->
+    <div class="selection-info" id="selectionInfo">
+      <span id="selectedCount">0</span> contactos seleccionados
     </div>
     
     <!-- Filtros por Tipo -->
@@ -40,7 +49,7 @@
       </button>
     </div>
     
-    <!-- Nuevo: Filtros Avanzados por País/Área -->
+    <!-- Filtros Avanzados por País/Área -->
     <div class="advanced-filters">
       <div class="filter-section">
         <h3>Filtros Avanzados</h3>
@@ -82,7 +91,18 @@
     <div class="contacts-container">
       <div class="contacts-header">
         <h2 class="contacts-title">Mis Contactos</h2>
-        <span class="contacts-count" id="count">0 contactos</span>
+        <div class="contacts-actions">
+          <span class="contacts-count" id="count">0 contactos</span>
+          <!-- Nuevo: Botones de selección masiva -->
+          <div class="bulk-actions">
+            <button class="btn-bulk" onclick="selectAllContacts()">
+              <i class="fas fa-check-double"></i> Seleccionar Todos
+            </button>
+            <button class="btn-bulk" onclick="deselectAllContacts()">
+              <i class="fas fa-times"></i> Deseleccionar Todos
+            </button>
+          </div>
+        </div>
       </div>
       
       <div class="contacts-grid" id="contacts">
