@@ -2,11 +2,15 @@
 let allContacts = [];
 let filteredContacts = [];
 let currentFilter = 'all';
+let advancedFilters = {
+  countryCode: '521',
+  areaCode: null
+};
 
 // Mapeo de códigos de país a banderas (usando flag-icons)
 const countryCodeToFlag = {
   '1': 'us',    // Estados Unidos
-  '52': 'mx',   // México
+  '521': 'mx',   // México
   '34': 'es',   // España
   '54': 'ar',   // Argentina
   '55': 'br',   // Brasil
@@ -42,16 +46,14 @@ async function findContacts() {
   `;
 
   try {
-     
-     const response = await fetch("http://127.0.0.1:8000/api/find-contacts", {
-       method: "POST",
-       headers: {
-         "Content-Type": "application/json"
-       },
-       body: JSON.stringify({})
-     });
-     const data = await response.json();
-    
+    const response = await fetch("http://127.0.0.1:8000/api/find-contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({})
+    });
+    const data = await response.json();
 
     // Si hay contactos
     if (Array.isArray(data) && data.length > 0) {
@@ -72,6 +74,111 @@ async function findContacts() {
     `;
     document.getElementById("count").textContent = "Error";
   }
+}
+
+// Nueva función: Aplicar filtros avanzados
+async function applyAdvancedFilters() {
+  const countryCode = document.getElementById('countryCode').value.trim();
+  const areaCode = document.getElementById('areaCode').value.trim();
+  
+  // Validaciones básicas
+  if (countryCode && !/^\d+$/.test(countryCode)) {
+    alert('El código de país debe contener solo dígitos');
+    return;
+  }
+  
+  if (areaCode && !/^\d+$/.test(areaCode)) {
+    alert('El código de área debe contener solo dígitos');
+    return;
+  }
+  
+  const container = document.getElementById("contacts");
+  container.innerHTML = `
+    <div class="loading">
+      <i class="fas fa-filter fa-spin"></i>
+      <h3>Aplicando filtros</h3>
+      <p>Filtrando contactos por código de país y área...</p>
+    </div>
+  `;
+
+  try {
+    const filterData = {};
+    if (countryCode) filterData.country_code = countryCode;
+    if (areaCode) filterData.area_code = areaCode;
+
+    const response = await fetch("http://127.0.0.1:8000/api/filter-contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(filterData)
+    });
+    
+    const data = await response.json();
+    
+    if (data.error) {
+      throw new Error(data.message);
+    }
+    
+    // Actualizar los contactos con los resultados filtrados
+    if (data.matched_contacts && data.matched_contacts.length > 0) {
+      allContacts = data.matched_contacts;
+      filteredContacts = [...allContacts];
+      renderContacts();
+      
+      // Mostrar información del filtro aplicado
+      showFilterInfo(data);
+    } else {
+      showEmptyStateWithFilter(data);
+    }
+
+  } catch (error) {
+    container.innerHTML = `
+      <div class="error-state">
+        <i class="fas fa-exclamation-circle"></i>
+        <h3>Error al filtrar</h3>
+        <p>${error.message}</p>
+      </div>
+    `;
+  }
+}
+
+function showFilterInfo(data) {
+  const countryCode = document.getElementById('countryCode').value.trim() || '521';
+  const areaCode = document.getElementById('areaCode').value.trim();
+  
+  let filterText = `Filtro: País ${countryCode}`;
+  if (areaCode) {
+    filterText += `, Área ${areaCode}`;
+  }
+  
+  filterText += ` | Encontrados: ${data.filtered_count} de ${data.total_jids_found}`;
+  
+  // Puedes mostrar esta información en la interfaz si lo deseas
+  console.log(filterText);
+}
+
+function showEmptyStateWithFilter(data) {
+  const container = document.getElementById("contacts");
+  const countElement = document.getElementById("count");
+  
+  const countryCode = document.getElementById('countryCode').value.trim() || '521';
+  const areaCode = document.getElementById('areaCode').value.trim();
+  
+  let filterDetails = `Código de país: ${countryCode}`;
+  if (areaCode) {
+    filterDetails += `, Código de área: ${areaCode}`;
+  }
+  
+  container.innerHTML = `
+    <div class="empty-state">
+      <i class="fas fa-filter"></i>
+      <h3>No se encontraron contactos con este filtro</h3>
+      <p>${filterDetails}</p>
+      <p>Se encontraron ${data.total_jids_found} contactos en total, pero ninguno coincide con los criterios.</p>
+    </div>
+  `;
+  countElement.textContent = `0 de ${data.total_jids_found} contactos`;
 }
 
 function formatPhoneNumber(number) {
@@ -121,17 +228,6 @@ function getCountryName(countryCode) {
     'do': 'República Dominicana'
   };
   return countryNames[countryCode] || `Código ${countryCode}`;
-}
-
-function formatDate(dateString) {
-  const date = new Date(dateString);
-  return date.toLocaleDateString('es-ES', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
 }
 
 function renderContacts() {
@@ -203,22 +299,8 @@ function renderContacts() {
           }
           ${formattedNumber}
         </p>
-        <div class="contact-meta">
-          <span>Creado: ${formatDate(contact.createdAt)}</span>
-          <span>Actualizado: ${formatDate(contact.updatedAt)}</span>
-        </div>
       `;
       card.appendChild(info);
-      
-      // Acciones
-      const actions = document.createElement("div");
-      actions.className = "contact-actions";
-      actions.innerHTML = `
-        <button class="action-btn">
-          <i class="fas fa-ellipsis-v"></i>
-        </button>
-      `;
-      card.appendChild(actions);
       
       container.appendChild(card);
     });
@@ -286,14 +368,31 @@ function clearFilters() {
   // Restablecer filtros
   currentFilter = 'all';
   
+  // Limpiar filtros avanzados
+  document.getElementById('countryCode').value = '521';
+  document.getElementById('areaCode').value = '';
+  
   // Actualizar UI
   document.querySelectorAll('.filter-btn').forEach(btn => {
     btn.classList.remove('active');
   });
   document.querySelector(`.filter-btn[onclick="filterContacts('all')"]`).classList.add('active');
   
-  // Aplicar filtros
-  applyFilters();
+  // Recargar contactos originales
+  if (allContacts.length > 0) {
+    filteredContacts = [...allContacts];
+    renderContacts();
+  } else {
+    // Si no hay contactos, mostrar estado inicial
+    document.getElementById("contacts").innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-address-book"></i>
+        <h3>Lista de contactos vacía</h3>
+        <p>Haga clic en "Sincronizar Contactos" para comenzar</p>
+      </div>
+    `;
+    document.getElementById("count").textContent = "0 contactos";
+  }
 }
 
 function toggleRawData() {

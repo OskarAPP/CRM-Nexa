@@ -27,6 +27,7 @@
       </button>
     </div>
     
+    <!-- Filtros por Tipo -->
     <div class="filter-container">
       <button class="filter-btn active" onclick="filterContacts('all')">
         <i class="fas fa-users"></i> Todos
@@ -37,6 +38,45 @@
       <button class="filter-btn" onclick="filterContacts('group')">
         <i class="fas fa-users"></i> Grupos
       </button>
+    </div>
+    
+    <!-- Nuevo: Filtros Avanzados por País/Área -->
+    <div class="advanced-filters">
+      <div class="filter-section">
+        <h3>Filtros Avanzados</h3>
+        <div class="filter-inputs">
+          <div class="input-group">
+            <label for="countryCode">
+              <i class="fas fa-flag"></i> Código de País
+            </label>
+            <input 
+              type="text" 
+              id="countryCode" 
+              placeholder="Ej: 521 (México)"
+              value="521"
+              maxlength="5"
+            >
+            <small>Por defecto: 521 (México)</small>
+          </div>
+          
+          <div class="input-group">
+            <label for="areaCode">
+              <i class="fas fa-map-marker-alt"></i> Código de Área
+            </label>
+            <input 
+              type="text" 
+              id="areaCode" 
+              placeholder="Ej: 996 (Campeche)"
+              maxlength="5"
+            >
+            <small>Opcional - Ej: 996, 999, etc.</small>
+          </div>
+          
+          <button class="btn btn-filter" onclick="applyAdvancedFilters()">
+            <i class="fas fa-filter"></i> Aplicar Filtros
+          </button>
+        </div>
+      </div>
     </div>
     
     <div class="contacts-container">
