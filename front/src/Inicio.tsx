@@ -23,7 +23,7 @@ function MessageManager() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('texto')
   // Texto state
-  const [numerosTexto, setNumerosTexto] = useState('5219961122642,5219821295240')
+  const [numerosTexto, setNumerosTexto] = useState('5219961122642,5219821295240,5215626058831')
   const [mensaje, setMensaje] = useState('Hola 👋 este es un mensaje de prueba')
   // Media state
   const [numerosMedia, setNumerosMedia] = useState('5219961122642,5219821295240')
@@ -36,6 +36,7 @@ function MessageManager() {
 
   // Resultados
   const [resultText, setResultText] = useState('// Los resultados de sus envíos aparecerán aquí')
+  const [showDetails, setShowDetails] = useState(false)
 
   const autoTypeNode = useMemo(() => {
     if (!mimeType) {
@@ -171,7 +172,8 @@ function MessageManager() {
           <p className="subtitle">Envíe mensajes y medios a sus contactos de WhatsApp de forma profesional</p>
         </header>
 
-        <div className="message-container">
+        <div className="content-grid">
+          <div className="message-container">
           <div className="tabs">
             <div className={`tab ${activeTab === 'texto' ? 'active' : ''}`} onClick={() => setActiveTab('texto')}>
               <i className="fas fa-font"></i> Mensaje de Texto
@@ -247,16 +249,31 @@ function MessageManager() {
               </button>
             </div>
           </div>
-        </div>
+          </div>
 
-        <div className="results-container">
+          <div className="results-container">
           <div className="results-header">
             <h2 className="results-title"><i className="fas fa-list-alt"></i> Resultados del Envío</h2>
-            <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '.9rem' }} onClick={clearResults}>
-              <i className="fas fa-trash"></i> Limpiar
-            </button>
+            <div className="results-actions">
+              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '.9rem' }} onClick={() => setShowDetails((v) => !v)}>
+                <i className="fas fa-info-circle"></i> {showDetails ? 'Ocultar detalles' : 'Ver detalles'}
+              </button>
+              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '.9rem' }} onClick={clearResults}>
+                <i className="fas fa-trash"></i> Limpiar
+              </button>
+            </div>
           </div>
-          <pre className="results-content">{resultText}</pre>
+
+          {/* Summary view */}
+          <div className="results-summary">
+            {renderSummary(resultText)}
+          </div>
+
+          {/* Technical details (raw) */}
+          {showDetails && (
+            <pre className="results-content" aria-label="Detalles técnicos">{resultText}</pre>
+          )}
+          </div>
         </div>
       </div>
     </section>
@@ -273,5 +290,77 @@ function renderPreview(type: MediaType, base64: string, mime: string) {
     <p>
       <i className="fas fa-file"></i> Archivo seleccionado ({mime})
     </p>
+  )
+}
+
+// Render a friendly summary for non-technical users from raw API text
+function renderSummary(raw: string) {
+  if (!raw || raw.startsWith('//')) {
+    return <p className="results-hint">Los resultados de sus envíos aparecerán aquí.</p>
+  }
+  let data: any = null
+  try {
+    data = JSON.parse(raw)
+  } catch {
+    // Not JSON: show as error string
+    if (raw.startsWith('HTTP')) {
+      return (
+        <div className="summary">
+          <div className="summary-row warning">
+            <span className="label">Estado</span>
+            <span className="value">{raw.split('\n')[0]}</span>
+          </div>
+          <p className="summary-note">No pudimos procesar detalles. Revise los detalles técnicos.</p>
+        </div>
+      )
+    }
+    return <p className="results-hint">{raw}</p>
+  }
+
+  // Try common shapes: {success:true, details:[], failed:[]} or custom
+  const success = data.success ?? data.ok ?? data.status === 'ok'
+  const sentTo = data.sentTo || data.numeros || data.to || []
+  const countSent = data.countSent ?? data.sent?.length ?? (Array.isArray(sentTo) ? sentTo.length : 0)
+  const failed = data.failed || data.errors || []
+  const message = data.message || data.msg || (success ? 'Envío realizado' : 'Envío con problemas')
+
+  return (
+    <div className="summary">
+      <div className={`summary-row ${success ? 'ok' : 'warning'}`}>
+        <span className="label">Resultado</span>
+        <span className="value">{success ? 'Enviado correctamente' : 'Con errores'}</span>
+      </div>
+      <div className="summary-row">
+        <span className="label">Mensaje</span>
+        <span className="value">{message}</span>
+      </div>
+      <div className="summary-grid">
+        <div className="summary-card">
+          <div className="summary-card-title">Destinatarios</div>
+          <div className="summary-card-value">{Array.isArray(sentTo) ? sentTo.length : countSent}</div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-card-title">Enviados</div>
+          <div className="summary-card-value ok">{countSent}</div>
+        </div>
+        <div className="summary-card">
+          <div className="summary-card-title">Fallidos</div>
+          <div className="summary-card-value warning">{Array.isArray(failed) ? failed.length : 0}</div>
+        </div>
+      </div>
+      {Array.isArray(failed) && failed.length > 0 && (
+        <div className="summary-list">
+          <div className="summary-list-title">No enviados</div>
+          <ul>
+            {failed.map((f: any, i: number) => (
+              <li key={i}>
+                <span className="badge error">{f?.numero || f?.to || 'desconocido'}</span>
+                <span className="muted">{f?.reason || f?.error || 'Error no especificado'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
