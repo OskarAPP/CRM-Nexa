@@ -298,7 +298,7 @@ function renderSummary(raw: string) {
   if (!raw || raw.startsWith('//')) {
     return <p className="results-hint">Los resultados de sus envíos aparecerán aquí.</p>
   }
-   let data: any = null
+  let data: any = null
   try {
     data = JSON.parse(raw)
   } catch {
@@ -317,56 +317,11 @@ function renderSummary(raw: string) {
     return <p className="results-hint">{raw}</p>
   }
 
-  // Si el backend devolvió un arreglo por destinatario
-  if (Array.isArray(data)) {
-    const items = data as Array<any>
-    const totals = { sent: 0, pending: 0, delivered: 0, read: 0, failed: 0, other: 0 }
-    items.forEach((it) => {
-      const st = String(it?.status || it?.provider_status || '').toLowerCase()
-      if (st === 'sent' || st === 'ok' || st === 'success' || st === 'sended') totals.sent++
-      else if (st === 'pending' || st === 'queued') totals.pending++
-      else if (st === 'delivered') totals.delivered++
-      else if (st === 'read') totals.read++
-      else if (st === 'failed' || st === 'error') totals.failed++
-      else totals.other++
-    })
-    const totalDest = items.length
-    // Enviados debe incluir PENDING como solicitado
-    const enviados = totals.sent + totals.pending
-    const errores = totals.failed
-
-    return (
-      <div className="summary">
-        <div className={`summary-row ${errores > 0 ? 'warning' : 'ok'}`}>
-          <span className="label">Resultado</span>
-          <span className="value">{errores > 0 ? 'Con errores' : 'Procesado'}</span>
-        </div>
-        <div className="summary-grid">
-          <div className="summary-card">
-            <div className="summary-card-title">Destinatarios</div>
-            <div className="summary-card-value">{totalDest}</div>
-          </div>
-          <div className="summary-card">
-            <div className="summary-card-title">Enviados</div>
-            <div className="summary-card-value ok">{enviados}</div>
-          </div>
-          <div className="summary-card">
-            <div className="summary-card-title">Errores</div>
-            <div className="summary-card-value warning">{errores}</div>
-          </div>
-        </div>
-
-        {/* Se eliminó el detalle por destinatario a solicitud */}
-      </div>
-    )
-  }
-
   // Try common shapes: {success:true, details:[], failed:[]} or custom
   const success = data.success ?? data.ok ?? data.status === 'ok'
   const sentTo = data.sentTo || data.numeros || data.to || []
   const countSent = data.countSent ?? data.sent?.length ?? (Array.isArray(sentTo) ? sentTo.length : 0)
-      const failed = data.failed || data.errors || []
-      const pending = data.pending || 0
+  const failed = data.failed || data.errors || []
   const message = data.message || data.msg || (success ? 'Envío realizado' : 'Envío con problemas')
 
   return (
@@ -386,7 +341,7 @@ function renderSummary(raw: string) {
         </div>
         <div className="summary-card">
           <div className="summary-card-title">Enviados</div>
-             <div className="summary-card-value ok">{countSent + pending}</div>
+          <div className="summary-card-value ok">{countSent}</div>
         </div>
         <div className="summary-card">
           <div className="summary-card-title">Fallidos</div>
