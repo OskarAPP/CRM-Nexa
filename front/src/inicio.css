@@ -260,6 +260,28 @@
 }
 .mensajes label i { color: var(--primary); }
 
+/* Auto mode visual state */
+.mensajes .input-field.auto-mode {
+  background: linear-gradient(135deg, rgba(124,58,237,0.08) 0%, rgba(14,165,233,0.08) 100%);
+  border-style: dashed;
+  color: #475569;
+}
+.mensajes .input-field.auto-mode:disabled {
+  cursor: not-allowed;
+  opacity: 0.9;
+}
+
+.mensajes .csv-row {
+  margin-top: .6rem;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+}
+.mensajes .csv-row .csv-count {
+  color: #475569;
+  font-size: .9rem;
+}
+
 /* Buttons */
 .mensajes .btn { border-radius: 12px; padding: 0.85rem 1.4rem; box-shadow: 0 10px 22px rgba(109,40,217,0.22); }
 .mensajes .btn:hover { transform: translateY(-1px) scale(1.01); }

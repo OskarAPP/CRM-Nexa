@@ -25,6 +25,9 @@ function MessageManager() {
   // Texto state
   const [numerosTexto, setNumerosTexto] = useState('5219961122642,5219821295240,5215626058831')
   const [mensaje, setMensaje] = useState('Hola 👋 este es un mensaje de prueba')
+  const [isManualTexto, setIsManualTexto] = useState(true)
+  const [csvCountTexto, setCsvCountTexto] = useState(0)
+  const csvInputTextoRef = useRef<HTMLInputElement | null>(null)
   // Media state
   const [numerosMedia, setNumerosMedia] = useState('5219961122642,5219821295240')
   const [mediaBase64, setMediaBase64] = useState('')
@@ -33,6 +36,9 @@ function MessageManager() {
   const [mediaType, setMediaType] = useState<MediaType>('document')
   const [mimeType, setMimeType] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [isManualMedia, setIsManualMedia] = useState(true)
+  const [csvCountMedia, setCsvCountMedia] = useState(0)
+  const csvInputMediaRef = useRef<HTMLInputElement | null>(null)
 
   // Resultados
   const [resultText, setResultText] = useState('// Los resultados de sus envíos aparecerán aquí')
@@ -84,6 +90,64 @@ function MessageManager() {
       setFileName(file.name)
     }
     reader.readAsDataURL(file)
+  }
+
+  // === CSV helpers ===
+  function extractNumbersFromCsv(text: string): string[] {
+    const raw = text
+      .split(/[\n,;\t]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    const cleaned = raw
+      .map((s) => s.replace(/[^\d+]/g, '')) // keep digits and plus
+      .map((s) => s.replace(/^\+/, '')) // remove leading + if present
+      .filter((s) => s.length >= 8)
+    // de-duplicate preserving order
+    const seen = new Set<string>()
+    const unique: string[] = []
+    for (const n of cleaned) {
+      if (!seen.has(n)) { seen.add(n); unique.push(n) }
+    }
+    return unique
+  }
+
+  async function handleCsvTexto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const content = await file.text()
+      const nums = extractNumbersFromCsv(content)
+      setNumerosTexto(nums.join(','))
+      setCsvCountTexto(nums.length)
+    } finally {
+      // reset input so selecting the same file again still triggers change
+      e.target.value = ''
+    }
+  }
+
+  async function handleCsvMedia(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const content = await file.text()
+      const nums = extractNumbersFromCsv(content)
+      setNumerosMedia(nums.join(','))
+      setCsvCountMedia(nums.length)
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  function clearCsvTexto() {
+    setNumerosTexto('')
+    setCsvCountTexto(0)
+    if (csvInputTextoRef.current) csvInputTextoRef.current.value = ''
+  }
+
+  function clearCsvMedia() {
+    setNumerosMedia('')
+    setCsvCountMedia(0)
+    if (csvInputMediaRef.current) csvInputMediaRef.current.value = ''
   }
 
   async function enviarMensajes() {
@@ -186,8 +250,32 @@ function MessageManager() {
           {/* Texto Tab */}
           <div className={`tab-content ${activeTab === 'texto' ? 'active' : ''}`}>
             <div className="form-group">
-              <label htmlFor="numeros-texto"><i className="fas fa-phone"></i> Números de destino</label>
-              <input id="numeros-texto" className="input-field" value={numerosTexto} onChange={(e) => setNumerosTexto(e.target.value)} placeholder="Ingrese números separados por comas" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label htmlFor="numeros-texto"><i className="fas fa-phone"></i> Números de destino</label>
+                <button
+                  type="button"
+                  aria-label="Modo manual/automático"
+                  title="Modo manual/automático"
+                  onClick={() => setIsManualTexto((v) => !v)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.5rem' }}
+                >
+                  <i className={`fas ${isManualTexto ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                  <span style={{ fontSize: '.9rem' }}>{isManualTexto ? 'Manual' : 'Automático'}</span>
+                </button>
+              </div>
+              <input id="numeros-texto" className={`input-field ${!isManualTexto ? 'auto-mode' : ''}`} disabled={!isManualTexto} value={numerosTexto} onChange={(e) => setNumerosTexto(e.target.value)} placeholder="Ingrese números separados por comas" />
+              {!isManualTexto && (
+                <div className="csv-row">
+                  <button type="button" className="btn" onClick={() => csvInputTextoRef.current?.click()}><i className="fas fa-file-csv"></i> Cargar CSV</button>
+                  <span className="csv-count">{csvCountTexto > 0 ? `${csvCountTexto} números cargados` : 'Importe un CSV con una columna de números'}</span>
+                  {csvCountTexto > 0 && (
+                    <button type="button" onClick={clearCsvTexto} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '.5rem .75rem', borderRadius: '8px', cursor: 'pointer', marginLeft: 'auto' }}>
+                      <i className="fas fa-trash"></i> Descartar
+                    </button>
+                  )}
+                  <input ref={csvInputTextoRef} type="file" accept=".csv" className="hidden" onChange={handleCsvTexto} />
+                </div>
+              )}
               <p className="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
             </div>
 
@@ -206,8 +294,32 @@ function MessageManager() {
           {/* Media Tab */}
           <div className={`tab-content ${activeTab === 'media' ? 'active' : ''}`}>
             <div className="form-group">
-              <label htmlFor="media-numeros"><i className="fas fa-phone"></i> Números de destino</label>
-              <input id="media-numeros" className="input-field" value={numerosMedia} onChange={(e) => setNumerosMedia(e.target.value)} placeholder="Ingrese números separados por comas" />
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <label htmlFor="media-numeros"><i className="fas fa-phone"></i> Números de destino</label>
+                <button
+                  type="button"
+                  aria-label="Modo manual/automático"
+                  title="Modo manual/automático"
+                  onClick={() => setIsManualMedia((v) => !v)}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.5rem' }}
+                >
+                  <i className={`fas ${isManualMedia ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                  <span style={{ fontSize: '.9rem' }}>{isManualMedia ? 'Manual' : 'Automático'}</span>
+                </button>
+              </div>
+              <input id="media-numeros" className={`input-field ${!isManualMedia ? 'auto-mode' : ''}`} disabled={!isManualMedia} value={numerosMedia} onChange={(e) => setNumerosMedia(e.target.value)} placeholder="Ingrese números separados por comas" />
+              {!isManualMedia && (
+                <div className="csv-row">
+                  <button type="button" className="btn" onClick={() => csvInputMediaRef.current?.click()}><i className="fas fa-file-csv"></i> Cargar CSV</button>
+                  <span className="csv-count">{csvCountMedia > 0 ? `${csvCountMedia} números cargados` : 'Importe un CSV con una columna de números'}</span>
+                  {csvCountMedia > 0 && (
+                    <button type="button" onClick={clearCsvMedia} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '.5rem .75rem', borderRadius: '15px', cursor: 'pointer', marginLeft: 'auto' }}>
+                      <i className="fas fa-trash"></i> Descartar
+                    </button>
+                  )}
+                  <input ref={csvInputMediaRef} type="file" accept=".csv" className="hidden" onChange={handleCsvMedia} />
+                </div>
+              )}
               <p className="input-hint">Separe los números con comas. Incluya el código de país</p>
             </div>
 
