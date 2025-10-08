@@ -1,63 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ComponentType } from 'react'
 import './contacts.css'
-import TodosModule from './modules/TodosModule'
-import ContactosModule from './modules/ContactosModule'
-import GruposModule from './modules/GruposModule'
+import TodosModule, { filterTodos } from './modules/TodosModule'
+import ContactosModule, { filterIndividualContacts } from './modules/ContactosModule'
+import GruposModule, { filterGroups } from './modules/GruposModule'
 import type { ContactsModuleProps } from './modules/ContactModuleBase'
 import type { Contact, FilterResponse, FilterTotals, FilterType, LoadingMode } from './types'
-
-const COUNTRY_CODE_FLAGS: Record<string, string> = {
-  '1': 'us',
-  '521': 'mx',
-  '34': 'es',
-  '54': 'ar',
-  '55': 'br',
-  '56': 'cl',
-  '57': 'co',
-  '58': 've',
-  '51': 'pe',
-  '593': 'ec',
-  '591': 'bo',
-  '598': 'uy',
-  '595': 'py',
-  '507': 'pa',
-  '506': 'cr',
-  '503': 'sv',
-  '502': 'gt',
-  '504': 'hn',
-  '505': 'ni',
-  '53': 'cu',
-  '509': 'ht',
-  '1809': 'do',
-  '1829': 'do',
-  '1849': 'do',
-}
-
-const COUNTRY_NAMES: Record<string, string> = {
-  mx: 'México',
-  us: 'Estados Unidos',
-  es: 'España',
-  ar: 'Argentina',
-  br: 'Brasil',
-  cl: 'Chile',
-  co: 'Colombia',
-  ve: 'Venezuela',
-  pe: 'Perú',
-  ec: 'Ecuador',
-  bo: 'Bolivia',
-  uy: 'Uruguay',
-  py: 'Paraguay',
-  pa: 'Panamá',
-  cr: 'Costa Rica',
-  sv: 'El Salvador',
-  gt: 'Guatemala',
-  hn: 'Honduras',
-  ni: 'Nicaragua',
-  cu: 'Cuba',
-  ht: 'Haití',
-  do: 'República Dominicana',
-}
 
 function ensureStylesLoaded() {
   const cdnLinks = [
@@ -84,15 +32,20 @@ function ensureStylesLoaded() {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
-const MODULE_COMPONENTS: Record<FilterType, (props: ContactsModuleProps) => ReactElement> = {
+const MODULE_COMPONENTS: Record<FilterType, ComponentType<ContactsModuleProps>> = {
   all: TodosModule,
   contact: ContactosModule,
   group: GruposModule,
 }
 
+const FILTER_FUNCTIONS: Record<FilterType, (contacts: Contact[]) => Contact[]> = {
+  all: filterTodos,
+  contact: filterIndividualContacts,
+  group: filterGroups,
+}
+
 function Contacts() {
   const [allContacts, setAllContacts] = useState<Contact[]>([])
-  const [filteredContacts, setFilteredContacts] = useState<Contact[]>([])
   const [currentFilter, setCurrentFilter] = useState<FilterType>('all')
   const [activeAreaCodes, setActiveAreaCodes] = useState<string[]>([])
   const [countryCode, setCountryCode] = useState('521')
@@ -119,10 +72,6 @@ function Contacts() {
     }
   }, [exportSuccessCount])
 
-  useEffect(() => {
-    applyTypeFilter(currentFilter, allContacts)
-  }, [currentFilter, allContacts])
-
   const selectionInfo = useMemo(() => {
     const size = selectedContacts.size
     return {
@@ -131,16 +80,18 @@ function Contacts() {
     }
   }, [selectedContacts])
 
+  const visibleContacts = useMemo(() => FILTER_FUNCTIONS[currentFilter](allContacts), [allContacts, currentFilter])
+
   const contactsCountLabel = useMemo(() => {
     if (isLoading) return 'Cargando...'
-    if (filteredContacts.length > 0) {
-      return `${filteredContacts.length} de ${allContacts.length} contactos`
+    if (visibleContacts.length > 0) {
+      return `${visibleContacts.length} de ${allContacts.length} contactos`
     }
     if (allContacts.length > 0) {
       return `0 de ${allContacts.length} contactos`
     }
     return '0 contactos'
-  }, [isLoading, filteredContacts.length, allContacts.length])
+  }, [isLoading, visibleContacts.length, allContacts.length])
 
   const parseAreaCodes = (value: string) => {
     const cleaned = value
@@ -164,12 +115,10 @@ function Contacts() {
       const data: Contact[] = await response.json()
       if (Array.isArray(data) && data.length > 0) {
         setAllContacts(data)
-        setFilteredContacts(data)
         setSelectedContacts(new Set())
         setRawData(JSON.stringify(data, null, 2))
       } else {
         setAllContacts([])
-        setFilteredContacts([])
         setRawData(JSON.stringify(data, null, 2))
       }
     } catch (err: any) {
@@ -196,7 +145,7 @@ function Contacts() {
   const handleSelectAll = () => {
     setSelectedContacts((prev) => {
       const next = new Set(prev)
-      filteredContacts.forEach((contact) => {
+  visibleContacts.forEach((contact) => {
         if (contact.remoteJid) {
           next.add(contact.remoteJid)
         }
@@ -217,9 +166,6 @@ function Contacts() {
     setFilterTotals(null)
     setSelectedContacts(new Set())
     setErrorMessage(null)
-    if (allContacts.length > 0) {
-      setFilteredContacts(allContacts)
-    }
   }
 
   const handleApplyAdvancedFilters = async () => {
@@ -255,7 +201,6 @@ function Contacts() {
       }
       if (data.matched_contacts && data.matched_contacts.length > 0) {
         setAllContacts(data.matched_contacts)
-        setFilteredContacts(data.matched_contacts)
         setSelectedContacts(new Set())
         setFilterTotals({
           total: data.total_jids_found ?? data.matched_contacts.length,
@@ -264,7 +209,6 @@ function Contacts() {
         setRawData(JSON.stringify(data, null, 2))
       } else {
         setAllContacts(data.matched_contacts || [])
-        setFilteredContacts([])
         setRawData(JSON.stringify(data, null, 2))
         setFilterTotals({
           total: data.total_jids_found ?? 0,
@@ -277,16 +221,6 @@ function Contacts() {
       setIsLoading(false)
       setLoadingMode(null)
     }
-  }
-
-  const applyTypeFilter = (type: FilterType, contacts: Contact[]) => {
-    let next = contacts
-    if (type === 'contact') {
-      next = contacts.filter((contact) => contact.remoteJid?.includes('@s.whatsapp.net'))
-    } else if (type === 'group') {
-      next = contacts.filter((contact) => contact.remoteJid?.includes('@g.us'))
-    }
-    setFilteredContacts(next)
   }
 
   const handleExportSelected = () => {
@@ -330,28 +264,10 @@ function Contacts() {
     })
   }
 
-  const getCountryFlag = (code: string) => COUNTRY_CODE_FLAGS[code] || 'question'
-
-  const getCountryName = (code: string) => COUNTRY_NAMES[code] || `Código ${code}`
-
-  const formatPhoneNumber = (number: string) => {
-    const clean = number.replace(/^\+/, '')
-    const country = clean.substring(0, 3)
-    const main = clean.substring(3)
-    if (main.length === 10) {
-      return `+${country} ${main.substring(0, 3)}-${main.substring(3, 6)}-${main.substring(6)}`
-    }
-    if (main.length === 8) {
-      return `+${country} ${main.substring(0, 4)}-${main.substring(4)}`
-    }
-    return `+${clean}`
-  }
-
   const ModuleComponent = MODULE_COMPONENTS[currentFilter]
 
   const moduleProps: ContactsModuleProps = {
     type: currentFilter,
-    contacts: filteredContacts,
     allContacts,
     isLoading,
     loadingMode,
@@ -361,9 +277,6 @@ function Contacts() {
     filterTotals,
     selectedContacts,
     onToggleSelection: handleToggleSelection,
-    formatPhoneNumber,
-    getCountryFlag,
-    getCountryName,
   }
 
   return (

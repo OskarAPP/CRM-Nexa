@@ -4,15 +4,8 @@ import type { Contact, FilterTotals, FilterType, LoadingMode } from '../types'
 
 type ToggleSelectionHandler = (jid?: string) => void
 
-type FlagGetter = (code: string) => string
-
-type PhoneFormatter = (number: string) => string
-
-type CountryNameGetter = (code: string) => string
-
 export interface ContactsModuleProps {
   type: FilterType
-  contacts: Contact[]
   allContacts: Contact[]
   isLoading: boolean
   loadingMode: LoadingMode
@@ -22,9 +15,83 @@ export interface ContactsModuleProps {
   filterTotals: FilterTotals | null
   selectedContacts: Set<string>
   onToggleSelection: ToggleSelectionHandler
-  formatPhoneNumber: PhoneFormatter
-  getCountryFlag: FlagGetter
-  getCountryName: CountryNameGetter
+}
+
+export interface ContactModuleViewProps extends ContactsModuleProps {
+  contacts: Contact[]
+}
+
+const COUNTRY_CODE_FLAGS: Record<string, string> = {
+  '1': 'us',
+  '521': 'mx',
+  '34': 'es',
+  '54': 'ar',
+  '55': 'br',
+  '56': 'cl',
+  '57': 'co',
+  '58': 've',
+  '51': 'pe',
+  '593': 'ec',
+  '591': 'bo',
+  '598': 'uy',
+  '595': 'py',
+  '507': 'pa',
+  '506': 'cr',
+  '503': 'sv',
+  '502': 'gt',
+  '504': 'hn',
+  '505': 'ni',
+  '53': 'cu',
+  '509': 'ht',
+  '1809': 'do',
+  '1829': 'do',
+  '1849': 'do',
+}
+
+const COUNTRY_NAMES: Record<string, string> = {
+  mx: 'México',
+  us: 'Estados Unidos',
+  es: 'España',
+  ar: 'Argentina',
+  br: 'Brasil',
+  cl: 'Chile',
+  co: 'Colombia',
+  ve: 'Venezuela',
+  pe: 'Perú',
+  ec: 'Ecuador',
+  bo: 'Bolivia',
+  uy: 'Uruguay',
+  py: 'Paraguay',
+  pa: 'Panamá',
+  cr: 'Costa Rica',
+  sv: 'El Salvador',
+  gt: 'Guatemala',
+  hn: 'Honduras',
+  ni: 'Nicaragua',
+  cu: 'Cuba',
+  ht: 'Haití',
+  do: 'República Dominicana',
+}
+
+function getCountryFlag(code: string) {
+  return COUNTRY_CODE_FLAGS[code] || 'question'
+}
+
+function getCountryName(code: string) {
+  return COUNTRY_NAMES[code] || `Código ${code}`
+}
+
+function formatPhoneNumber(number: string) {
+  const clean = number.replace(/^\+/, '')
+  const country = clean.substring(0, 3)
+  const main = clean.substring(3)
+  if (main.length === 10) {
+    return `+${country} ${main.substring(0, 3)}-${main.substring(3, 6)}-${main.substring(6)}`
+  }
+  if (main.length === 8) {
+    return `+${country} ${main.substring(0, 4)}-${main.substring(4)}`
+  }
+  return `+${clean}`
 }
 
 function renderLoading(loadingMode: LoadingMode) {
@@ -91,10 +158,7 @@ export default function ContactModuleBase({
   filterTotals,
   selectedContacts,
   onToggleSelection,
-  formatPhoneNumber,
-  getCountryFlag,
-  getCountryName,
-}: ContactsModuleProps) {
+}: ContactModuleViewProps) {
   if (isLoading) {
     return renderLoading(loadingMode)
   }
