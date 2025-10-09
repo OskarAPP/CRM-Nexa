@@ -44,7 +44,6 @@ class AuthController extends Controller
         ], 201);
     }
 
-    // Login con token
     // Login con token y consulta de credenciales WhatsApp
 public function login(Request $request)
 {
@@ -114,8 +113,6 @@ public function login(Request $request)
         'whatsapp_api_response' => $whatsappData
     ], 200);
 }
-
-
 
     // Cerrar sesión (eliminar tokens)
     public function logout(Request $request)
