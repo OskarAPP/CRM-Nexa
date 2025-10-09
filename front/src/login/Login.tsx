@@ -1,6 +1,58 @@
+import { useEffect, useState } from 'react'
 import './login.css'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+
 export default function Login() {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [responseText, setResponseText] = useState<string>('')
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    const id = 'fa-css-cdn'
+    if (!document.getElementById(id)) {
+      const link = document.createElement('link')
+      link.id = id
+      link.rel = 'stylesheet'
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+      document.head.appendChild(link)
+    }
+  }, [])
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setIsLoading(true)
+    setResponseText('Iniciando sesión...')
+
+    try {
+      const res = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const text = await res.text()
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(text)
+      } catch {
+        parsed = text || 'Respuesta vacía del servidor'
+      }
+
+      setResponseText(typeof parsed === 'string' ? parsed : JSON.stringify(parsed, null, 2))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error desconocido'
+      setResponseText(`Error de red: ${message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   return (
     <div className="login-page">
       <div className="login-hero">
@@ -33,12 +85,19 @@ export default function Login() {
           <span className="login-card__subtitle">Ingresá a tu panel de control</span>
         </div>
 
-        <form className="login-card__form">
+        <form className="login-card__form" onSubmit={handleSubmit}>
           <label className="login-field">
             <span>Correo empresarial</span>
             <div className="login-input">
               <i className="fas fa-envelope"></i>
-              <input type="email" placeholder="nombre@empresa.com" autoComplete="email" disabled />
+              <input
+                type="email"
+                placeholder="nombre@empresa.com"
+                autoComplete="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                required
+              />
             </div>
           </label>
 
@@ -46,9 +105,21 @@ export default function Login() {
             <span>Contraseña</span>
             <div className="login-input">
               <i className="fas fa-lock"></i>
-              <input type="password" placeholder="••••••••" autoComplete="off" disabled />
-              <button type="button" className="login-toggle" disabled>
-                <i className="fas fa-eye-slash"></i>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                required
+              />
+              <button
+                type="button"
+                className="login-toggle"
+                onClick={() => setShowPassword((value) => !value)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+              >
+                <i className={`fas ${showPassword ? 'fa-eye-slash' : 'fa-eye'}`}></i>
               </button>
             </div>
           </label>
@@ -64,10 +135,16 @@ export default function Login() {
             </button>
           </div>
 
-          <button className="login-submit" type="button" disabled>
-            Acceder a Nexa CRM
+          <button className="login-submit" type="submit" disabled={isLoading}>
+            {isLoading ? 'Validando...' : 'Acceder a Nexa CRM'}
           </button>
         </form>
+
+        {responseText && (
+          <div className="login-response" role="status" aria-live="polite">
+            <pre>{responseText}</pre>
+          </div>
+        )}
 
         <div className="login-divider">
           <span>o ingresa con</span>
