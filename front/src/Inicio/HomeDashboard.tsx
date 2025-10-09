@@ -1,7 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import './home.css'
+import OnboardingModal from './OnboardingModal'
 
 export default function HomeDashboard() {
+  const [showWelcomeModal, setShowWelcomeModal] = useState(true)
+
   useEffect(() => {
     const id = 'fa-css-cdn'
     if (!document.getElementById(id)) {
@@ -108,6 +111,8 @@ export default function HomeDashboard() {
 
   return (
     <div className="inicio-layout">
+      <OnboardingModal visible={showWelcomeModal} onClose={() => setShowWelcomeModal(false)} />
+
       <aside className="inicio-sidebar">
         <div className="sidebar-brand">
           <span className="brand-logo">Nexa CRM</span>
