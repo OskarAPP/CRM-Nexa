@@ -1,0 +1,248 @@
+import { useEffect } from 'react'
+import './home.css'
+
+export default function HomeDashboard() {
+  useEffect(() => {
+    const id = 'fa-css-cdn'
+    if (!document.getElementById(id)) {
+      const link = document.createElement('link')
+      link.id = id
+      link.rel = 'stylesheet'
+      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+      document.head.appendChild(link)
+    }
+  }, [])
+
+  const quickLinks = [
+    {
+      icon: 'fa-comments-dollar',
+      label: 'Mensajes masivos',
+      description: 'Programa campañas y automatiza seguimientos',
+      href: '/mensajes',
+      accent: 'accent-blue',
+    },
+    {
+      icon: 'fa-users',
+      label: 'Contactos',
+      description: 'Gestiona leads, segmentos y estados',
+      href: '/contactos',
+      accent: 'accent-purple',
+    },
+    {
+      icon: 'fa-bullhorn',
+      label: 'Campañas activas',
+      description: 'Revisa tus flujos de publicidad en curso',
+      href: '#',
+      accent: 'accent-teal',
+    },
+  ]
+
+  const campaignCards = [
+    {
+      title: 'Campaña de bienvenida',
+      channel: 'WhatsApp',
+      status: 'En curso',
+      rate: '68% tasa de apertura',
+      tag: 'Masivo · Segmento nuevos leads',
+    },
+    {
+      title: 'Promoción Octubre',
+      channel: 'Email + WhatsApp',
+      status: 'Finalizada',
+      rate: '32% tasa de conversión',
+      tag: 'Publicidad · Segmento compradores 2024',
+    },
+    {
+      title: 'Recordatorio de renovación',
+      channel: 'SMS',
+      status: 'Programada',
+      rate: 'Inicio mañana 09:00',
+      tag: 'Automatización · Clientes actuales',
+    },
+  ]
+
+  const activityFeed = [
+    {
+      icon: 'fa-paper-plane',
+      user: 'Laura Méndez',
+      action: 'envió 450 mensajes de seguimiento',
+      time: 'Hace 12 minutos',
+    },
+    {
+      icon: 'fa-user-plus',
+      user: 'ID automatización',
+      action: 'agregó 38 leads desde formulario web',
+      time: 'Hoy 08:24',
+    },
+    {
+      icon: 'fa-chart-line',
+      user: 'Dashboard IA',
+      action: 'detectó oportunidad de venta cruzada',
+      time: 'Ayer 18:03',
+    },
+  ]
+
+  const stats = [
+    {
+      label: 'Mensajes enviados esta semana',
+      value: '1,420',
+      trend: '+18% vs. semana anterior',
+      icon: 'fa-paper-plane',
+      color: 'card-navy',
+    },
+    {
+      label: 'Campañas activas',
+      value: '5',
+      trend: '2 finalizan hoy',
+      icon: 'fa-bullseye',
+      color: 'card-indigo',
+    },
+    {
+      label: 'Tasa de respuesta promedio',
+      value: '42%',
+      trend: '+6 pts. este mes',
+      icon: 'fa-reply-all',
+      color: 'card-cyan',
+    },
+  ]
+
+  return (
+    <div className="inicio-layout">
+      <aside className="inicio-sidebar">
+        <div className="sidebar-brand">
+          <span className="brand-logo">Nexa CRM</span>
+          <p>Control center</p>
+        </div>
+
+        <nav className="sidebar-nav">
+          <h4>Accesos rápidos</h4>
+          <ul>
+            {quickLinks.map((item) => (
+              <li key={item.label} className={item.accent}>
+                <a href={item.href}>
+                  <i className={`fas ${item.icon}`}></i>
+                  <div>
+                    <span>{item.label}</span>
+                    <small>{item.description}</small>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </nav>
+
+        <div className="sidebar-footer">
+          <p>Pro tip</p>
+          <span>Integra tu WhatsApp Business API para métricas en tiempo real.</span>
+        </div>
+      </aside>
+
+      <main className="inicio-main">
+        <header className="inicio-header">
+          <div>
+            <h1>Panel general</h1>
+            <p>Bienvenido de vuelta, este es el resumen de tus últimas interacciones.</p>
+          </div>
+          <button type="button" className="cta-button">
+            <i className="fas fa-plus"></i> Crear nueva campaña
+          </button>
+        </header>
+
+        <section className="stats-grid">
+          {stats.map((stat) => (
+            <article key={stat.label} className={`stat-card ${stat.color}`}>
+              <div className="stat-icon">
+                <i className={`fas ${stat.icon}`}></i>
+              </div>
+              <div className="stat-copy">
+                <h3>{stat.value}</h3>
+                <p>{stat.label}</p>
+                <span>{stat.trend}</span>
+              </div>
+            </article>
+          ))}
+        </section>
+
+        <section className="content-grid">
+          <article className="campaigns-card glass">
+            <div className="section-header">
+              <div>
+                <h2>Campañas recientes</h2>
+                <p>Últimos envíos masivos y piezas publicitarias destacadas.</p>
+              </div>
+              <button type="button" className="ghost-btn">
+                Ver historial
+              </button>
+            </div>
+
+            <div className="campaign-list">
+              {campaignCards.map((card) => (
+                <div key={card.title} className="campaign-item">
+                  <div className="campaign-icon">
+                    <i className="fas fa-wave-square"></i>
+                  </div>
+                  <div className="campaign-copy">
+                    <h3>{card.title}</h3>
+                    <p>{card.tag}</p>
+                    <div className="campaign-meta">
+                      <span><i className="fas fa-share-alt"></i> {card.channel}</span>
+                      <span><i className="fas fa-signal"></i> {card.rate}</span>
+                    </div>
+                  </div>
+                  <span className="status-chip">{card.status}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <aside className="right-column">
+            <section className="glass activity-card">
+              <div className="section-header">
+                <div>
+                  <h2>Actividad del equipo</h2>
+                  <p>Lo más relevante de las últimas horas.</p>
+                </div>
+              </div>
+
+              <ul className="activity-feed">
+                {activityFeed.map((item) => (
+                  <li key={item.time}>
+                    <div className="activity-icon">
+                      <i className={`fas ${item.icon}`}></i>
+                    </div>
+                    <div>
+                      <strong>{item.user}</strong>
+                      <p>{item.action}</p>
+                      <span>{item.time}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="glass performance-card">
+              <div className="section-header">
+                <div>
+                  <h2>Performance mensual</h2>
+                  <p>Evolución general de interacciones.</p>
+                </div>
+                <button type="button" className="ghost-btn">Descargar reporte</button>
+              </div>
+
+              <div className="chart-placeholder">
+                <div className="chart-bars">
+                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day, index) => (
+                    <div key={day} className="chart-col">
+                      <div className={`chart-bar bar-${index + 1}`}></div>
+                      <span>{day}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </aside>
+        </section>
+      </main>
+    </div>
+  )
+}
