@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import './inicio.css'
+import './mensajes.css'
 
 type TabKey = 'texto' | 'media'
 type MediaType = 'image' | 'video' | 'audio' | 'document'
 
-export default function Inicio() {
+export default function Mensajes() {
   return <MessageManager />
 }
 
