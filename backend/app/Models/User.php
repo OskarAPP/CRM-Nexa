@@ -5,10 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens; // 👈 Importar Sanctum
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasApiTokens, HasFactory, Notifiable; // 👈 Agregar HasApiTokens aquí
 
     // Campos asignables
     protected $fillable = [
@@ -33,7 +34,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
     ];
 
-    // Si quieres un getter para "name" (opcional)
+    // Getter opcional para el nombre completo
     public function getNameAttribute()
     {
         return trim("{$this->nombres} {$this->apellidos}");
