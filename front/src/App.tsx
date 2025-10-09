@@ -3,6 +3,7 @@ import Inicio from './Inicio'
 import Mensajes from './mensajes/mensajes'
 import Contacts from './contacts/Contacts'
 import Login from './login/Login'
+import Pruebas from './Pruebas'
 
 function App() {
   return (
@@ -11,7 +12,9 @@ function App() {
       <Route path="/inicio" element={<Inicio />} />
       <Route path="/mensajes" element={<Mensajes />} />
       <Route path="/contactos" element={<Contacts />} />
-      <Route path="/login" element={<Login />} />
+    <Route path="/login" element={<Login />} />
+    <Route path="/prueba" element={<Navigate to="/pruebas" replace />} />
+    <Route path="/pruebas" element={<Pruebas />} />
     </Routes>
   )
 }
