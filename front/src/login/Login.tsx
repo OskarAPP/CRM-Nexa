@@ -240,7 +240,7 @@ export default function Login() {
 
   function handleGoToDashboard() {
     // Redirección al dashboard
-    navigate('/dashboard')
+    navigate('/home-dashboard')
   }
 
   function formatTime(seconds: number): string {
