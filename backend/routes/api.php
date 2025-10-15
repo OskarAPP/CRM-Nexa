@@ -15,6 +15,10 @@ Route::prefix('credenciales-whatsapp')->group(function () {
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/login/status', [AuthController::class, 'whatsappStatus']);
+});
+
 
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/perfil', [AuthController::class, 'perfil']); // ejemplo
