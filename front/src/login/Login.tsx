@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './login.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
-type LoginStage = 'form' | 'qr'
+type LoginStage = 'form' | 'success' | 'qr'
 
 function coerceQrDataUrl(raw: string): string {
   const trimmed = raw.trim()
@@ -44,6 +45,7 @@ function extractQrFromPayload(payload: unknown): string | null {
 }
 
 export default function Login() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -52,6 +54,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false)
   const [isQrLoading, setIsQrLoading] = useState(false)
   const [qrSrc, setQrSrc] = useState<string | null>(null)
+  const [timeLeft, setTimeLeft] = useState<number>(120) // 2 minutos en segundos
 
   useEffect(() => {
     const id = 'fa-css-cdn'
@@ -63,6 +66,28 @@ export default function Login() {
       document.head.appendChild(link)
     }
   }, [])
+
+  // Timer para el QR
+  useEffect(() => {
+    let interval: NodeJS.Timeout | null = null
+    
+    if (stage === 'qr' && timeLeft > 0) {
+      interval = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            if (interval) clearInterval(interval)
+            handleBackToLogin()
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    }
+
+    return () => {
+      if (interval) clearInterval(interval)
+    }
+  }, [stage, timeLeft])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -78,20 +103,19 @@ export default function Login() {
         },
         body: JSON.stringify({ email, password }),
       })
+      
       if (!res.ok) {
         throw new Error(res.status === 401 ? 'Credenciales incorrectas' : `Error ${res.status}`)
       }
 
-      const payload = await res.json()
-      const qrCandidate = extractQrFromPayload(payload)
+      // Mostrar mensaje de éxito antes del QR
+      setStage('success')
+      
+      // Esperar 2 segundos antes de mostrar el QR
+      setTimeout(() => {
+        handleShowQr()
+      }, 2000)
 
-      if (!qrCandidate) {
-        throw new Error('La respuesta no contiene un código QR válido')
-      }
-
-      setStage('qr')
-      setIsQrLoading(true)
-      setQrSrc(coerceQrDataUrl(qrCandidate))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido'
       setErrorMessage(message)
@@ -99,6 +123,39 @@ export default function Login() {
       setStage('form')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  async function handleShowQr() {
+    try {
+      setIsQrLoading(true)
+      // En una implementación real, aquí harías otra llamada al API para obtener el QR
+      // Por ahora simulamos que ya tenemos los datos del login anterior
+      const res = await fetch(`${API_BASE}/api/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      })
+      
+      if (res.ok) {
+        const payload = await res.json()
+        const qrCandidate = extractQrFromPayload(payload)
+
+        if (!qrCandidate) {
+          throw new Error('La respuesta no contiene un código QR válido')
+        }
+
+        setStage('qr')
+        setQrSrc(coerceQrDataUrl(qrCandidate))
+        setTimeLeft(120) // Reiniciar timer
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Error al cargar el QR'
+      setErrorMessage(message)
+      setStage('form')
     }
   }
 
@@ -110,6 +167,7 @@ export default function Login() {
     setEmail('')
     setPassword('')
     setShowPassword(false)
+    setTimeLeft(120)
   }
 
   function handleQrLoad() {
@@ -120,6 +178,17 @@ export default function Login() {
     setIsQrLoading(false)
     setQrSrc(null)
     setErrorMessage('No se pudo mostrar la imagen del QR. Intenta generar uno nuevamente.')
+  }
+
+  function handleGoToDashboard() {
+    // Redirección al dashboard
+    navigate('/dashboard')
+  }
+
+  function formatTime(seconds: number): string {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
   }
 
   return (
@@ -152,9 +221,12 @@ export default function Login() {
         <div className="login-card__header">
           <div className="login-card__logo">Nexa CRM</div>
           <span className="login-card__subtitle">
-            {stage === 'form' ? 'Ingresá a tu panel de control' : 'Escanea tu código QR para vincular tu sesión'}
+            {stage === 'form' && 'Ingresá a tu panel de control'}
+            {stage === 'success' && '¡Inicio de sesión exitoso!'}
+            {stage === 'qr' && 'Vincula tu WhatsApp escaneando el código QR'}
           </span>
         </div>
+
         {stage === 'form' ? (
           <>
             <form className="login-card__form" onSubmit={handleSubmit}>
@@ -240,11 +312,38 @@ export default function Login() {
               </p>
             </div>
           </>
+        ) : stage === 'success' ? (
+          <div className="login-success">
+            <div className="login-success__icon">
+              <i className="fas fa-check-circle"></i>
+            </div>
+            <div className="login-success__message">
+              <h3>¡Inicio de sesión exitoso!</h3>
+              <p>Redirigiendo al escáner de QR...</p>
+            </div>
+            <div className="login-spinner"></div>
+          </div>
         ) : (
           <div className="login-qr">
             <div className="login-qr__meta">
-              <p>Utiliza tu aplicación de WhatsApp para escanear el siguiente código y vincular tu sesión web.</p>
-              <p className="login-qr__hint">Si necesitas cambiar de cuenta puedes regresar al formulario y volver a iniciar sesión.</p>
+              <p><strong>Instrucciones para vincular WhatsApp:</strong></p>
+              <ol className="login-qr__instructions">
+                <li>Abre la aplicación de WhatsApp en tu teléfono móvil</li>
+                <li>Toca los tres puntos (⋮) en la esquina superior derecha</li>
+                <li>Selecciona "Dispositivos vinculados"</li>
+                <li>Toca "Vincular un dispositivo"</li>
+                <li>Escanea el código QR que se muestra a continuación</li>
+                <li>Espera a que se complete la sincronización</li>
+                <li>Una vez sincronizado, presiona el botón "Ir al Dashboard"</li>
+              </ol>
+              <p className="login-qr__hint">
+                ⏱️ Tiempo restante: <strong>{formatTime(timeLeft)}</strong>
+                {timeLeft <= 30 && (
+                  <span style={{color: '#f87171', marginLeft: '8px'}}>
+                    ⚠️ El código expirará pronto
+                  </span>
+                )}
+              </p>
             </div>
 
             <div className="login-qr__visual" aria-live="polite">
@@ -254,7 +353,7 @@ export default function Login() {
               {qrSrc && (
                 <img
                   src={qrSrc}
-                  alt="Código QR de autenticación"
+                  alt="Código QR para vincular WhatsApp"
                   onLoad={handleQrLoad}
                   onError={handleQrError}
                   style={{ opacity: isQrLoading ? 0 : 1 }}
@@ -269,10 +368,16 @@ export default function Login() {
               </div>
             )}
 
-            <button type="button" className="login-back" onClick={handleBackToLogin}>
-              <i className="fas fa-arrow-left"></i>
-              Volver al inicio de sesión
-            </button>
+            <div className="login-qr__actions">
+              <button type="button" className="login-dashboard" onClick={handleGoToDashboard}>
+                <i className="fas fa-arrow-right"></i>
+                Ir al Dashboard
+              </button>
+              <button type="button" className="login-back" onClick={handleBackToLogin}>
+                <i className="fas fa-arrow-left"></i>
+                Volver al inicio de sesión
+              </button>
+            </div>
           </div>
         )}
       </div>

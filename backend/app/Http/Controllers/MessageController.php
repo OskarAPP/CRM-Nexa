@@ -4,23 +4,36 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use GuzzleHttp\Client;
+use App\Models\CredencialWhatsapp;
 
 class MessageController extends Controller
 {
     public function sendMessage(Request $request)
     {
         $request->validate([
+            'user_id' => 'required|integer',
             'numeros' => 'required|array',
             'mensaje' => 'required|string',
         ]);
 
+        $userId = $request->user_id;
+
+        // ✅ Obtener credenciales dinámicamente
+        $credencial = CredencialWhatsapp::where('user_id', $userId)->first();
+        if (!$credencial) {
+            return response()->json([
+                'error' => true,
+                'message' => 'No se encontraron credenciales de WhatsApp para el usuario especificado.'
+            ], 404);
+        }
+
+        $instanceName = $credencial->instancia;
+        $apiKey = $credencial->apikey;
+        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendText/{$instanceName}";
+
         $numeros = $request->numeros;
         $mensaje = $request->mensaje;
-
         $client = new Client();
-        $apiUrl = 'https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendText/Chalino';
-        $apiKey = '5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA';
-
         $resultados = [];
 
         foreach ($numeros as $numero) {
@@ -62,10 +75,10 @@ class MessageController extends Controller
         return response()->json($resultados);
     }
 
-    // Método modificado para enviar medios a múltiples contactos
     public function sendMedia(Request $request)
     {
         $request->validate([
+            'user_id' => 'required|integer',
             'numeros' => 'required|array',
             'mediatype' => 'required|string',   // image, video, document
             'mimetype' => 'required|string',    // ejemplo: image/png
@@ -76,11 +89,23 @@ class MessageController extends Controller
             'linkPreview' => 'nullable|boolean'
         ]);
 
+        $userId = $request->user_id;
+
+        // ✅ Obtener credenciales dinámicamente
+        $credencial = CredencialWhatsapp::where('user_id', $userId)->first();
+        if (!$credencial) {
+            return response()->json([
+                'error' => true,
+                'message' => 'No se encontraron credenciales de WhatsApp para el usuario especificado.'
+            ], 404);
+        }
+
+        $instanceName = $credencial->instancia;
+        $apiKey = $credencial->apikey;
+        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendMedia/{$instanceName}";
+
         $numeros = $request->numeros;
         $client = new Client();
-        $apiUrl = 'https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendMedia/Chalino';
-        $apiKey = '5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA';
-
         $resultados = [];
 
         foreach ($numeros as $numero) {

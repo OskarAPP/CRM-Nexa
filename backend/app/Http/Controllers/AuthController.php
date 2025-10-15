@@ -114,21 +114,74 @@ public function login(Request $request)
     ], 200);
 }
 
-    // Cerrar sesión (eliminar tokens)
-    public function logout(Request $request)
-    {
-        $request->user()->tokens()->delete();
-
+   // Cerrar sesión con logout de WhatsApp
+public function logout(Request $request)
+{
+    // Validar que venga el user_id
+    $userId = $request->input('user_id');
+    if (!$userId) {
         return response()->json([
-            'message' => 'Sesión cerrada correctamente'
-        ]);
+            'message' => 'El parámetro user_id es obligatorio'
+        ], 400);
     }
 
-    // Perfil del usuario autenticado
-    public function perfil(Request $request)
-    {
+    // Buscar usuario
+    $user = User::find($userId);
+    if (!$user) {
         return response()->json([
-            'user' => $request->user()->makeHidden(['password']),
-        ]);
+            'message' => 'Usuario no encontrado'
+        ], 404);
     }
+
+    $whatsappResponse = null;
+    $credencial = \App\Models\CredencialWhatsapp::where('user_id', $user->id)->first();
+
+    if ($credencial) {
+        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host";
+        $instanceName = $credencial->instancia;
+        $apiKey = $credencial->apikey;
+
+        // Endpoint de logout
+        $endpoint = "/instance/logout/" . $instanceName;
+        $fullUrl = $apiUrl . $endpoint;
+
+        // Inicializar cURL
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $fullUrl);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            "apikey: " . $apiKey
+        ]);
+
+        // Ejecutar solicitud
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+
+        if (!curl_errno($ch) && $httpCode == 200) {
+            $whatsappResponse = json_decode($response, true);
+        } else {
+            $whatsappResponse = [
+                'error' => curl_errno($ch) ? curl_error($ch) : $response,
+                'http_code' => $httpCode
+            ];
+        }
+
+        curl_close($ch);
+
+        // Ocultar información sensible antes de enviar
+        $credencial->makeHidden(['instancia', 'apikey']);
+    }
+
+    // Eliminar tokens de Laravel
+    $user->tokens()->delete();
+
+    return response()->json([
+        'message' => 'Logout realizado correctamente',
+        'credencial_whatsapp' => $credencial,
+        'whatsapp_api_response' => $whatsappResponse
+    ], 200);
+}
+
+
 }

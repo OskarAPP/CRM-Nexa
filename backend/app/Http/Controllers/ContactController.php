@@ -7,36 +7,60 @@ use GuzzleHttp\Client;
 
 class ContactController extends Controller
 {
-    public function findContacts(Request $request)
-    {
-        $instanceName = "Chalino"; // 👈 Cambia el nombre de tu instancia
-        $apiKey = "5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA"; // 👈 Tu API Key
-        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
+            public function findContacts(Request $request)
+        {
+            try {
+                // ✅ Validar que venga el parámetro user_id
+                $userId = $request->input('user_id');
+                if (!$userId) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'El parámetro user_id es requerido.'
+                    ], 422);
+                }
 
-        try {
-            $client = new Client();
+                // ✅ Buscar las credenciales del usuario
+                $credencial = \App\Models\CredencialWhatsapp::where('user_id', $userId)->first();
 
-            $response = $client->post($apiUrl, [
-                'headers' => [
-                    'apikey' => $apiKey,
-                    'Accept' => 'application/json'
-                ],
-                'json' => [
-                    "where" => (object)[] // 👈 Si la API necesita filtros, aquí los agregas
-                ]
-            ]);
+                if (!$credencial) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'No se encontraron credenciales de WhatsApp para el usuario especificado.'
+                    ], 404);
+                }
 
-            $data = json_decode($response->getBody(), true);
+                // ✅ Extraer los valores desde la BD
+                $instanceName = $credencial->instancia;
+                $apiKey = $credencial->apikey;
+                $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
 
-            return response()->json($data);
+                // ✅ Consumir la API externa con Guzzle
+                $client = new \GuzzleHttp\Client();
+                $response = $client->post($apiUrl, [
+                    'headers' => [
+                        'apikey' => $apiKey,
+                        'Accept' => 'application/json'
+                    ],
+                    'json' => [
+                        "where" => (object)[] // si se desea, aquí podrían agregarse filtros
+                    ]
+                ]);
 
-        } catch (\Exception $e) {
-            return response()->json([
-                "error" => true,
-                "message" => $e->getMessage()
-            ], 500);
+                // ✅ Decodificar la respuesta
+                $data = json_decode($response->getBody(), true);
+
+                return response()->json($data);
+
+            } catch (\Exception $e) {
+                return response()->json([
+                    "error" => true,
+                    "message" => $e->getMessage()
+                ], 500);
+            }
         }
-    }
+
+
+
 
     /**
      * Método mejorado: filtra contactos por country_code y múltiples area_codes.
@@ -49,121 +73,128 @@ class ContactController extends Controller
      *   "area_codes": ["999", "981", "996"]
      * }
      */
-    public function filterContacts(Request $request)
-    {
-        $instanceName = "Chalino";
-        $apiKey = "5CB5FA7385FE-4BEB-92BD-B8BC1EB841AA";
-        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
-
-        // Por defecto usamos México (521) como pediste
-        $country = $request->input('country_code', '521');
-        $areaCodes = $request->input('area_codes', []);
-
-        // Validaciones básicas
-        if (!preg_match('/^\d+$/', (string)$country)) {
-            return response()->json(['error' => true, 'message' => 'country_code debe contener sólo dígitos.'], 422);
-        }
-
-        // Validar que area_codes sea un array
-        if (!is_array($areaCodes)) {
-            // Si es un string, intentar convertirlo a array
-            if (is_string($areaCodes)) {
-                $areaCodes = array_map('trim', explode(',', $areaCodes));
-            } else {
-                $areaCodes = [];
-            }
-        }
-
-        // Validar cada código de área
-        foreach ($areaCodes as $area) {
-            if (!preg_match('/^\d+$/', (string)$area)) {
-                return response()->json(['error' => true, 'message' => 'Todos los area_codes deben contener sólo dígitos.'], 422);
-            }
-        }
-
-        try {
-            $client = new Client();
-
-            $response = $client->post($apiUrl, [
-                'headers' => [
-                    'apikey' => $apiKey,
-                    'Accept' => 'application/json'
-                ],
-                'json' => [
-                    "where" => (object)[] // traer todos y filtrar localmente
-                ]
-            ]);
-
-            $data = json_decode($response->getBody(), true);
-
-            // Extraer todos los JIDs (ej: 5219961046769@s.whatsapp.net) de la respuesta
-            $jids = $this->extractJidsFromArray($data);
-
-            $filtered = [];
-            foreach ($jids as $jid) {
-                $left = explode('@', $jid)[0]; // 5219961046769
-                // debe empezar por el country
-                if (strpos($left, (string)$country) !== 0) {
-                    continue;
+            public function filterContacts(Request $request)
+        {
+            try {
+                // ✅ Validar que venga el parámetro user_id
+                $userId = $request->input('user_id');
+                if (!$userId) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'El parámetro user_id es requerido.'
+                    ], 422);
                 }
 
-                $afterCountry = substr($left, strlen((string)$country));
-                if ($afterCountry === '') {
-                    continue;
+                // ✅ Buscar las credenciales del usuario
+                $credencial = \App\Models\CredencialWhatsapp::where('user_id', $userId)->first();
+
+                if (!$credencial) {
+                    return response()->json([
+                        'error' => true,
+                        'message' => 'No se encontraron credenciales de WhatsApp para el usuario especificado.'
+                    ], 404);
                 }
 
-                if (!empty($areaCodes)) {
-                    // comprobar que tras el country venga alguno de los area codes indicados
-                    $areaFound = null;
-                    foreach ($areaCodes as $area) {
-                        if (strpos($afterCountry, (string)$area) === 0) {
-                            $areaFound = (string)$area;
-                            break;
+                // ✅ Extraer los valores desde la BD
+                $instanceName = $credencial->instancia;
+                $apiKey = $credencial->apikey;
+                $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
+
+                // ✅ Tomar filtros desde la solicitud
+                $country = $request->input('country_code', '521'); // México por defecto
+                $areaCodes = $request->input('area_codes', []);
+
+                // Validaciones básicas
+                if (!preg_match('/^\d+$/', (string)$country)) {
+                    return response()->json(['error' => true, 'message' => 'country_code debe contener sólo dígitos.'], 422);
+                }
+
+                if (!is_array($areaCodes)) {
+                    if (is_string($areaCodes)) {
+                        $areaCodes = array_map('trim', explode(',', $areaCodes));
+                    } else {
+                        $areaCodes = [];
+                    }
+                }
+
+                foreach ($areaCodes as $area) {
+                    if (!preg_match('/^\d+$/', (string)$area)) {
+                        return response()->json(['error' => true, 'message' => 'Todos los area_codes deben contener sólo dígitos.'], 422);
+                    }
+                }
+
+                // ✅ Consumir la API externa
+                $client = new \GuzzleHttp\Client();
+                $response = $client->post($apiUrl, [
+                    'headers' => [
+                        'apikey' => $apiKey,
+                        'Accept' => 'application/json'
+                    ],
+                    'json' => [
+                        "where" => (object)[] // traer todos y filtrar localmente
+                    ]
+                ]);
+
+                $data = json_decode($response->getBody(), true);
+
+                // ✅ Extraer JIDs y filtrar por country/area
+                $jids = $this->extractJidsFromArray($data);
+                $filtered = [];
+
+                foreach ($jids as $jid) {
+                    $left = explode('@', $jid)[0];
+                    if (strpos($left, (string)$country) !== 0) continue;
+
+                    $afterCountry = substr($left, strlen((string)$country));
+                    if ($afterCountry === '') continue;
+
+                    if (!empty($areaCodes)) {
+                        $areaFound = null;
+                        foreach ($areaCodes as $area) {
+                            if (strpos($afterCountry, (string)$area) === 0) {
+                                $areaFound = (string)$area;
+                                break;
+                            }
                         }
+                        if ($areaFound === null) continue;
+                        $local = substr($afterCountry, strlen($areaFound));
+                    } else {
+                        $areaFound = substr($afterCountry, 0, 3);
+                        $local = substr($afterCountry, 3);
                     }
-                    
-                    if ($areaFound === null) {
-                        continue;
-                    }
-                    
-                    $local = substr($afterCountry, strlen($areaFound));
-                } else {
-                    // si no se pasó area, proponemos una "candidate" con los primeros 3 dígitos tras el country
-                    $areaFound = substr($afterCountry, 0, 3);
-                    $local = substr($afterCountry, 3);
+
+                    $filtered[] = [
+                        'jid' => $jid,
+                        'country_code' => (string)$country,
+                        'area_code' => $areaFound,
+                        'local_number' => $local
+                    ];
                 }
 
-                $filtered[] = [
-                    'jid' => $jid,
-                    'country_code' => (string)$country,
-                    'area_code' => $areaFound,
-                    'local_number' => $local
-                ];
+                // ✅ Asociar con objetos de contacto completos
+                $filteredJids = array_map(fn($f) => $f['jid'], $filtered);
+                $matchedContacts = $this->findObjectsContainingJids($data, $filteredJids);
+
+                return response()->json([
+                    'error' => false,
+                    'total_jids_found' => count($jids),
+                    'filtered_count' => count($filtered),
+                    'filters_applied' => [
+                        'country_code' => $country,
+                        'area_codes' => $areaCodes
+                    ],
+                    'filtered' => $filtered,
+                    'matched_contacts' => array_values($matchedContacts)
+                ]);
+
+            } catch (\Exception $e) {
+                return response()->json([
+                    "error" => true,
+                    "message" => $e->getMessage()
+                ], 500);
             }
-
-            // Intentar localizar objetos de contacto en el JSON que contengan esos JIDs
-            $filteredJids = array_map(function ($f) { return $f['jid']; }, $filtered);
-            $matchedContacts = $this->findObjectsContainingJids($data, $filteredJids);
-
-            return response()->json([
-                'error' => false,
-                'total_jids_found' => count($jids),
-                'filtered_count' => count($filtered),
-                'filters_applied' => [
-                    'country_code' => $country,
-                    'area_codes' => $areaCodes
-                ],
-                'filtered' => $filtered,
-                'matched_contacts' => array_values($matchedContacts) // objetos completos (si existen en la respuesta)
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                "error" => true,
-                "message" => $e->getMessage()
-            ], 500);
         }
-    }
+
 
     /**
      * Busca recursivamente cadenas que sean JIDs (números + @s.whatsapp.net o @g.us).
