@@ -1,7 +1,80 @@
-import { useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './home.css'
 
+type SessionSnapshot = {
+  name: string | null
+  id: string | null
+  userId: string | null
+  token: string | null
+}
+
+type CopyState = 'idle' | 'copied' | 'error'
+
+const DEFAULT_NAME = 'Nexa'
+const DEFAULT_SESSION: SessionSnapshot = {
+  name: null,
+  id: null,
+  userId: null,
+  token: null,
+}
+
+const STORAGE_FIELD_KEYS = {
+  name: ['nombres', 'nombre'],
+  id: ['Id', 'id'],
+  userId: ['user_id'],
+  token: ['token'],
+} as const
+
+const STORAGE_KEYS_SET = new Set<string>(
+  Object.values(STORAGE_FIELD_KEYS)
+    .flat()
+    .map((key) => key)
+)
+
+const sanitizeValue = (value: string | null) => {
+  if (!value) return null
+  const clean = value.trim()
+  return clean.length > 0 ? clean : null
+}
+
+const readSessionFromStorage = (): SessionSnapshot => {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return DEFAULT_SESSION
+  }
+
+  try {
+    const storage = window.localStorage
+
+    const pickValue = (keys: ReadonlyArray<string>) => {
+      for (const key of keys) {
+        const value = sanitizeValue(storage.getItem(key))
+        if (value) {
+          return value
+        }
+      }
+      return null
+    }
+
+    return {
+      name: pickValue(STORAGE_FIELD_KEYS.name),
+      id: pickValue(STORAGE_FIELD_KEYS.id),
+      userId: pickValue(STORAGE_FIELD_KEYS.userId),
+      token: pickValue(STORAGE_FIELD_KEYS.token),
+    }
+  } catch (error) {
+    console.warn('No se pudo leer la sesión guardada en localStorage', error)
+    return DEFAULT_SESSION
+  }
+}
+
 export default function HomeDashboard() {
+  const [session, setSession] = useState<SessionSnapshot>(() => readSessionFromStorage())
+  const [copyState, setCopyState] = useState<CopyState>('idle')
+
+  const refreshSession = useCallback(() => {
+    setSession(readSessionFromStorage())
+  }, [])
+
   useEffect(() => {
     const id = 'fa-css-cdn'
     if (!document.getElementById(id)) {
@@ -12,6 +85,105 @@ export default function HomeDashboard() {
       document.head.appendChild(link)
     }
   }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    refreshSession()
+
+    const handleStorage = (event: StorageEvent) => {
+      if (!event.key || STORAGE_KEYS_SET.has(event.key)) {
+        refreshSession()
+      }
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [refreshSession])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (copyState === 'idle') return
+
+    const timeout = window.setTimeout(() => setCopyState('idle'), copyState === 'copied' ? 2200 : 3200)
+    return () => window.clearTimeout(timeout)
+  }, [copyState])
+
+  const displayName = useMemo(() => {
+    if (!session.name) return DEFAULT_NAME
+    const clean = session.name.trim()
+    if (!clean) return DEFAULT_NAME
+    const firstWord = clean.split(/\s+/)[0]
+    if (!firstWord) return DEFAULT_NAME
+    return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()
+  }, [session.name])
+
+  const fullName = useMemo(() => session.name ?? `${DEFAULT_NAME} CRM`, [session.name])
+
+  const timeGreeting = useMemo(() => {
+    const hour = new Date().getHours()
+    if (hour < 12) return 'Buenos días'
+    if (hour < 19) return 'Buenas tardes'
+    return 'Buenas noches'
+  }, [])
+
+  const welcomeTitle = useMemo(() => `${timeGreeting}, ${displayName}!`, [timeGreeting, displayName])
+
+  const welcomeSubtitle = useMemo(
+    () =>
+      session.name
+        ? 'Este es tu panel general: métricas, campañas y actividad sincronizadas en tiempo real.'
+        : 'Accede con tus credenciales para personalizar este panel con tus datos e integraciones.',
+    [session.name]
+  )
+
+  const sessionDetails = useMemo(
+    () => [
+      { label: 'ID de cuenta', value: session.id ?? 'No asignado' },
+      { label: 'User ID', value: session.userId ?? 'No asignado' },
+    ],
+    [session.id, session.userId]
+  )
+
+  const maskedToken = useMemo(() => {
+    if (!session.token) return 'No asignado'
+    if (session.token.length <= 14) return session.token
+    return `${session.token.slice(0, 6)}····${session.token.slice(-4)}`
+  }, [session.token])
+
+  const hasSession = useMemo(
+    () => Boolean(session.name || session.id || session.userId || session.token),
+    [session.name, session.id, session.userId, session.token]
+  )
+
+  const integrationHint = useMemo(
+    () =>
+      hasSession
+        ? 'Comparte estos identificadores con tu equipo técnico para conectar automatizaciones y bots.'
+        : 'Una vez que inicies sesión, mostraremos aquí los identificadores para tus integraciones.',
+    [hasSession]
+  )
+
+  const copyLabel = useMemo(
+    () => (copyState === 'copied' ? 'Copiado' : copyState === 'error' ? 'Intenta nuevamente' : 'Copiar token'),
+    [copyState]
+  )
+
+  const handleCopyToken = useCallback(async () => {
+    if (!session.token) return
+    if (typeof navigator === 'undefined' || !navigator.clipboard) {
+      setCopyState('error')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(session.token)
+      setCopyState('copied')
+    } catch (error) {
+      console.warn('No se pudo copiar el token al portapapeles', error)
+      setCopyState('error')
+    }
+  }, [session.token])
 
   const quickLinks = [
     {
@@ -140,11 +312,11 @@ export default function HomeDashboard() {
       <main className="inicio-main">
         <header className="inicio-header">
           <div>
-            <h1>Panel general</h1>
-            <p>Bienvenido de vuelta, este es el resumen de tus últimas interacciones.</p>
+            <h1>{welcomeTitle}</h1>
+            <p>{welcomeSubtitle}</p>
           </div>
           <button type="button" className="cta-button">
-            <i className="fas fa-plus"></i> Crear nueva campaña
+            <i className="fas fa-plus" aria-hidden="true"></i> Crear nueva campaña
           </button>
         </header>
 
@@ -185,8 +357,12 @@ export default function HomeDashboard() {
                     <h3>{card.title}</h3>
                     <p>{card.tag}</p>
                     <div className="campaign-meta">
-                      <span><i className="fas fa-share-alt"></i> {card.channel}</span>
-                      <span><i className="fas fa-signal"></i> {card.rate}</span>
+                      <span>
+                        <i className="fas fa-share-alt"></i> {card.channel}
+                      </span>
+                      <span>
+                        <i className="fas fa-signal"></i> {card.rate}
+                      </span>
                     </div>
                   </div>
                   <span className="status-chip">{card.status}</span>
@@ -226,7 +402,9 @@ export default function HomeDashboard() {
                   <h2>Performance mensual</h2>
                   <p>Evolución general de interacciones.</p>
                 </div>
-                <button type="button" className="ghost-btn">Descargar reporte</button>
+                <button type="button" className="ghost-btn">
+                  Descargar reporte
+                </button>
               </div>
 
               <div className="chart-placeholder">
