@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import './home.css'
 
 type SessionSnapshot = {
@@ -70,6 +71,7 @@ const readSessionFromStorage = (): SessionSnapshot => {
 export default function HomeDashboard() {
   const [session, setSession] = useState<SessionSnapshot>(() => readSessionFromStorage())
   const [copyState, setCopyState] = useState<CopyState>('idle')
+  const navigate = useNavigate()
 
   const refreshSession = useCallback(() => {
     setSession(readSessionFromStorage())
@@ -190,24 +192,27 @@ export default function HomeDashboard() {
       icon: 'fa-comments-dollar',
       label: 'Mensajes masivos',
       description: 'Programa campañas y automatiza seguimientos',
-      href: '/mensajes',
+      path: '/mensajes',
       accent: 'accent-blue',
+      disabled: false,
     },
     {
       icon: 'fa-users',
       label: 'Contactos',
       description: 'Gestiona leads, segmentos y estados',
-      href: '/contactos',
+      path: '/contactos',
       accent: 'accent-purple',
+      disabled: false,
     },
     {
       icon: 'fa-bullhorn',
       label: 'Campañas activas',
       description: 'Revisa tus flujos de publicidad en curso',
-      href: '#',
+      path: null,
       accent: 'accent-teal',
+      disabled: true,
     },
-  ]
+  ] as const
 
   const campaignCards = [
     {
@@ -291,13 +296,21 @@ export default function HomeDashboard() {
           <ul>
             {quickLinks.map((item) => (
               <li key={item.label} className={item.accent}>
-                <a href={item.href}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (item.path) {
+                      navigate(item.path)
+                    }
+                  }}
+                  disabled={item.disabled || !item.path}
+                >
                   <i className={`fas ${item.icon}`}></i>
                   <div>
                     <span>{item.label}</span>
                     <small>{item.description}</small>
                   </div>
-                </a>
+                </button>
               </li>
             ))}
           </ul>
@@ -315,7 +328,11 @@ export default function HomeDashboard() {
             <h1>{welcomeTitle}</h1>
             <p>{welcomeSubtitle}</p>
           </div>
-          <button type="button" className="cta-button">
+          <button
+            type="button"
+            className="cta-button"
+            onClick={() => navigate('/mensajes')}
+          >
             <i className="fas fa-plus" aria-hidden="true"></i> Crear nueva campaña
           </button>
         </header>

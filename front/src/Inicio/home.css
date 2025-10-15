@@ -81,7 +81,8 @@ body {
   gap: 16px;
 }
 
-.sidebar-nav li a {
+.sidebar-nav li a,
+.sidebar-nav li button {
   display: flex;
   gap: 14px;
   align-items: center;
@@ -93,9 +94,26 @@ body {
   text-decoration: none;
   box-shadow: 0 16px 35px rgba(15, 23, 42, 0.4);
   transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  width: 100%;
 }
 
-.sidebar-nav li a:hover {
+.sidebar-nav li button {
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.6);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.sidebar-nav li button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  filter: grayscale(0.15);
+}
+
+.sidebar-nav li a:hover,
+.sidebar-nav li button:hover:not(:disabled) {
   transform: translateX(4px);
   border-color: rgba(56, 189, 248, 0.4);
   box-shadow: var(--inicio-glow);
