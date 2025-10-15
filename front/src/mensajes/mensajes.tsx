@@ -161,12 +161,19 @@ function MessageManager() {
       setResultText('Error: El mensaje no puede estar vacío')
       return
     }
+    const rawUserId = typeof window !== 'undefined' ? window.localStorage.getItem('user_id') : null
+    const sanitizedUserId = rawUserId ? rawUserId.trim() : null
+    const userId = sanitizedUserId ? Number(sanitizedUserId) : null
+    if (!sanitizedUserId || Number.isNaN(userId)) {
+      setResultText('Error: No se encontró un user_id válido en la sesión. Inicie sesión nuevamente.')
+      return
+    }
     setResultText('Enviando mensajes...')
     try {
       const resp = await fetch(`${API_BASE}/api/send-message`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numeros, mensaje }),
+        body: JSON.stringify({ user_id: userId, numeros, mensaje }),
       })
       if (!resp.ok) {
         const text = await resp.text().catch(() => '')
