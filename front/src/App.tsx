@@ -3,7 +3,8 @@ import Inicio from './Inicio'
 import Mensajes from './mensajes/mensajes'
 import Contacts from './contacts/Contacts'
 import Login from './login/Login'
-import Dashboard from './Dashboard';
+import Dashboard from './Dashboard'
+import HomeDashboard from './Inicio/HomeDashboard'
 
 function App() {
   return (
@@ -13,9 +14,10 @@ function App() {
       <Route path="/mensajes" element={<Mensajes />} />
       <Route path="/contactos" element={<Contacts />} />
 
-    <Route path="/login" element={<Login />} />
-    <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/home-dashboard" element={<HomeDashboard />} />
+      <Route path="*" element={<Navigate to="/login" replace />} />
     </Routes>
   )
 }

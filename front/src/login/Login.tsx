@@ -6,6 +6,27 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 type LoginStage = 'form' | 'success' | 'qr'
 
+type LoginPayloadUser = {
+  id?: number | string
+  nombres?: string
+  [key: string]: unknown
+}
+
+type LoginPayloadCredential = {
+  user_id?: number | string
+  [key: string]: unknown
+}
+
+type LoginSuccessPayload = {
+  Id?: number | string
+  id?: number | string
+  user_id?: number | string
+  user?: LoginPayloadUser | null
+  token?: unknown
+  credencial_whatsapp?: LoginPayloadCredential | null
+  [key: string]: unknown
+}
+
 function coerceQrDataUrl(raw: string): string {
   const trimmed = raw.trim()
   if (trimmed.startsWith('data:')) {
@@ -44,6 +65,41 @@ function extractQrFromPayload(payload: unknown): string | null {
   return null
 }
 
+function persistAuthSnapshot(payload: LoginSuccessPayload) {
+  if (typeof window === 'undefined' || !window.localStorage || !payload) return
+
+  const entries: Array<[string, string]> = []
+  const user = payload.user ?? null
+
+  const nombresValue = typeof user?.nombres === 'string' ? user.nombres : undefined
+  if (nombresValue && nombresValue.trim().length > 0) {
+    entries.push(['nombres', nombresValue.trim()])
+  }
+
+  const idCandidate = payload.Id ?? payload.id ?? user?.id
+  if (idCandidate !== undefined && idCandidate !== null) {
+    entries.push(['Id', String(idCandidate)])
+  }
+
+  const credentialUserId = payload.credencial_whatsapp?.user_id
+  const userIdCandidate = payload.user_id ?? credentialUserId ?? idCandidate ?? user?.id
+  if (userIdCandidate !== undefined && userIdCandidate !== null) {
+    entries.push(['user_id', String(userIdCandidate)])
+  }
+
+  if (payload.token !== undefined && payload.token !== null) {
+    entries.push(['token', String(payload.token)])
+  }
+
+  try {
+    for (const [key, value] of entries) {
+      window.localStorage.setItem(key, value)
+    }
+  } catch (error) {
+    console.error('No se pudo guardar la sesión en localStorage', error)
+  }
+}
+
 export default function Login() {
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
@@ -55,6 +111,7 @@ export default function Login() {
   const [isQrLoading, setIsQrLoading] = useState(false)
   const [qrSrc, setQrSrc] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(120) // 2 minutos en segundos
+  const [lastLoginPayload, setLastLoginPayload] = useState<LoginSuccessPayload | null>(null)
 
   useEffect(() => {
     const id = 'fa-css-cdn'
@@ -89,31 +146,40 @@ export default function Login() {
     }
   }, [stage, timeLeft])
 
+  async function requestLoginPayload(): Promise<LoginSuccessPayload> {
+    const res = await fetch(`${API_BASE}/api/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    })
+
+    if (!res.ok) {
+      throw new Error(res.status === 401 ? 'Credenciales incorrectas' : `Error ${res.status}`)
+    }
+
+    const payload = (await res.json()) as LoginSuccessPayload
+    persistAuthSnapshot(payload)
+    return payload
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsLoading(true)
     setErrorMessage(null)
 
     try {
-      const res = await fetch(`${API_BASE}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
-      
-      if (!res.ok) {
-        throw new Error(res.status === 401 ? 'Credenciales incorrectas' : `Error ${res.status}`)
-      }
+      const payload = await requestLoginPayload()
+      setLastLoginPayload(payload)
 
       // Mostrar mensaje de éxito antes del QR
       setStage('success')
       
       // Esperar 2 segundos antes de mostrar el QR
       setTimeout(() => {
-        handleShowQr()
+        handleShowQr(payload)
       }, 2000)
 
     } catch (error) {
@@ -126,36 +192,27 @@ export default function Login() {
     }
   }
 
-  async function handleShowQr() {
+  async function handleShowQr(prefetched?: LoginSuccessPayload | null) {
     try {
       setIsQrLoading(true)
-      // En una implementación real, aquí harías otra llamada al API para obtener el QR
-      // Por ahora simulamos que ya tenemos los datos del login anterior
-      const res = await fetch(`${API_BASE}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      })
-      
-      if (res.ok) {
-        const payload = await res.json()
-        const qrCandidate = extractQrFromPayload(payload)
+      const payload = prefetched ?? lastLoginPayload ?? (await requestLoginPayload())
+      setLastLoginPayload(payload)
 
-        if (!qrCandidate) {
-          throw new Error('La respuesta no contiene un código QR válido')
-        }
+      const qrCandidate = extractQrFromPayload(payload)
 
-        setStage('qr')
-        setQrSrc(coerceQrDataUrl(qrCandidate))
-        setTimeLeft(120) // Reiniciar timer
+      if (!qrCandidate) {
+        throw new Error('La respuesta no contiene un código QR válido')
       }
+
+      setErrorMessage(null)
+      setStage('qr')
+      setQrSrc(coerceQrDataUrl(qrCandidate))
+      setTimeLeft(120) // Reiniciar timer
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error al cargar el QR'
       setErrorMessage(message)
       setStage('form')
+      setIsQrLoading(false)
     }
   }
 
@@ -168,6 +225,7 @@ export default function Login() {
     setPassword('')
     setShowPassword(false)
     setTimeLeft(120)
+    setLastLoginPayload(null)
   }
 
   function handleQrLoad() {
