@@ -337,67 +337,6 @@ export default function HomeDashboard() {
           </button>
         </header>
 
-        <section className="session-summary glass">
-          <div className="session-greeting">
-            <span className="session-chip">Panel general</span>
-            <h2>Visión general de {displayName}</h2>
-            <p>
-              {session.name
-                ? `Gracias por volver, ${displayName}. Mantén la sesión activa para no perder ninguna conversación.`
-                : 'No hemos detectado una sesión guardada. Cuando inicies sesión podrás ver aquí tu información personalizada.'}
-            </p>
-            <div className="session-identity">
-              <span className="session-identity__label">
-                {hasSession ? 'Sesión personalizada' : 'Sesión pendiente'}
-              </span>
-              <strong>{hasSession ? fullName : 'Sin identificar'}</strong>
-              <small>
-                {session.id
-                  ? `ID interno ${session.id}`
-                  : 'Sincroniza tus credenciales para generar un ID interno.'}
-              </small>
-            </div>
-            <button type="button" className="ghost-btn session-refresh" onClick={refreshSession}>
-              <i className="fas fa-rotate-right" aria-hidden="true"></i>
-              <span>Actualizar datos</span>
-            </button>
-          </div>
-
-          <div className="session-meta">
-            <div className="session-meta__grid">
-              {sessionDetails.map(({ label, value }) => (
-                <article key={label} className="session-meta__item">
-                  <span className="session-meta__label">{label}</span>
-                  <span className="session-meta__value">{value}</span>
-                </article>
-              ))}
-            </div>
-
-            <div className="session-token">
-              <div className="session-token__label">
-                Token de autenticación
-                {copyState === 'copied' && (
-                  <span className="session-feedback session-feedback--success">¡Copiado!</span>
-                )}
-                {copyState === 'error' && (
-                  <span className="session-feedback session-feedback--error">No se pudo copiar</span>
-                )}
-              </div>
-              <code title={session.token ?? 'Sin token disponible'}>{maskedToken}</code>
-              <button
-                type="button"
-                className="session-token__button"
-                onClick={handleCopyToken}
-                disabled={!session.token}
-              >
-                <i className="fas fa-copy" aria-hidden="true"></i>
-                <span>{copyLabel}</span>
-              </button>
-              <p className="session-meta__hint">{integrationHint}</p>
-            </div>
-          </div>
-        </section>
-
         <section className="stats-grid">
           {stats.map((stat) => (
             <article key={stat.label} className={`stat-card ${stat.color}`}>
