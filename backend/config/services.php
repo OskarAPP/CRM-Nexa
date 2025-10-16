@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'evolution' => [
+        'base_url' => env('EVOLUTION_BASE_URL', 'https://nexa-evolution-api.yyfvlz.easypanel.host'),
+    ],
+
 ];

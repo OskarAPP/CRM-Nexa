@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import './login.css'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const SERVER_BASE = API_BASE.replace(/\/$/, '')
 
 type LoginStage = 'form' | 'success' | 'qr'
 
@@ -65,6 +66,111 @@ function extractQrFromPayload(payload: unknown): string | null {
   return null
 }
 
+function normalizeStringCandidate(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  if (typeof value === 'number') {
+    return String(value)
+  }
+
+  return null
+}
+
+function findValueByKeyMatch(
+  source: unknown,
+  matcher: (key: string) => boolean,
+  visited: WeakSet<object> = new WeakSet<object>(),
+): string | null {
+  if (!source || typeof source !== 'object') return null
+
+  const objectRef = source as Record<string, unknown>
+  const visitedKey = objectRef as unknown as object
+  if (visited.has(visitedKey)) return null
+  visited.add(visitedKey)
+
+  for (const [key, value] of Object.entries(objectRef)) {
+    if (matcher(key)) {
+      const normalized = normalizeStringCandidate(value)
+      if (normalized) {
+        return normalized
+      }
+
+      if (value && typeof value === 'object') {
+        const nestedRecord = value as Record<string, unknown>
+        const nestedFallback =
+          normalizeStringCandidate(nestedRecord.id) ??
+          normalizeStringCandidate(nestedRecord.name) ??
+          normalizeStringCandidate(nestedRecord.code) ??
+          normalizeStringCandidate(nestedRecord.value)
+
+        if (nestedFallback) {
+          return nestedFallback
+        }
+
+        const nestedMatch = findValueByKeyMatch(value, matcher, visited)
+        if (nestedMatch) {
+          return nestedMatch
+        }
+      }
+    }
+
+    if (value && typeof value === 'object') {
+      const nested = findValueByKeyMatch(value, matcher, visited)
+      if (nested) {
+        return nested
+      }
+    }
+  }
+
+  return null
+}
+
+function extractInstanceIdentifier(payload: LoginSuccessPayload | null): string | null {
+  if (!payload) return null
+
+  const matcher = (key: string) => {
+    const normalized = key.toLowerCase()
+    return normalized.includes('instance') || normalized.includes('instancia')
+  }
+  const fromPayload = findValueByKeyMatch(payload, matcher)
+  if (fromPayload) return fromPayload
+
+  const credential = payload.credencial_whatsapp ?? null
+  if (credential && typeof credential === 'object') {
+    const fromCredential = findValueByKeyMatch(credential, matcher)
+    if (fromCredential) return fromCredential
+  }
+
+  return null
+}
+
+function extractConnectionState(payload: unknown): string | null {
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+
+  if (typeof payload === 'number') {
+    return String(payload)
+  }
+
+  const matcher = (key: string) => {
+    const normalized = key.toLowerCase()
+    return (
+      normalized === 'state' ||
+      normalized === 'status' ||
+      normalized === 'connectionstate' ||
+      normalized === 'connection_state'
+    )
+  }
+
+  const extracted = findValueByKeyMatch(payload, matcher)
+  return extracted ? extracted.trim() : null
+}
+
 function persistAuthSnapshot(payload: LoginSuccessPayload) {
   if (typeof window === 'undefined' || !window.localStorage || !payload) return
 
@@ -91,6 +197,11 @@ function persistAuthSnapshot(payload: LoginSuccessPayload) {
     entries.push(['token', String(payload.token)])
   }
 
+  const instanceValue = extractInstanceIdentifier(payload)
+  if (instanceValue) {
+    entries.push(['instance', instanceValue])
+  }
+
   try {
     for (const [key, value] of entries) {
       window.localStorage.setItem(key, value)
@@ -112,6 +223,8 @@ export default function Login() {
   const [qrSrc, setQrSrc] = useState<string | null>(null)
   const [timeLeft, setTimeLeft] = useState<number>(120) // 2 minutos en segundos
   const [lastLoginPayload, setLastLoginPayload] = useState<LoginSuccessPayload | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState('')
+  const [hasRedirected, setHasRedirected] = useState(false)
 
   useEffect(() => {
     const id = 'fa-css-cdn'
@@ -145,6 +258,146 @@ export default function Login() {
       if (interval) clearInterval(interval)
     }
   }, [stage, timeLeft])
+
+  useEffect(() => {
+    if (stage !== 'qr') {
+      setConnectionStatus('')
+      setHasRedirected(false)
+      return
+    }
+
+    const payloadInstance = extractInstanceIdentifier(lastLoginPayload)
+    if (payloadInstance && typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem('instance', payloadInstance)
+      window.localStorage.setItem('instancia', payloadInstance)
+    }
+
+    const storedInstance =
+      payloadInstance ??
+      (typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem('instance') ?? window.localStorage.getItem('instancia')
+        : null)
+
+    const normalizedInstance = storedInstance?.trim() || null
+
+    const storedUserId =
+      typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem('user_id')
+        : null
+
+    const normalizedUserId = storedUserId?.trim() || null
+
+    if (!normalizedInstance && !normalizedUserId) {
+      setConnectionStatus('No encontramos información de la instancia. Por favor, inicia sesión nuevamente para generar un nuevo código.')
+      return
+    }
+
+    if (!normalizedInstance && normalizedUserId) {
+      setConnectionStatus('Conectando con tu cuenta para detectar la instancia activa...')
+    }
+
+  let pollingInstance = normalizedInstance ?? '__current__'
+
+  const successStates = new Set(['PENDING', 'CONNECTED', 'SYNCED', 'AUTHENTICATED', 'OPEN', 'READY'])
+
+    let isCancelled = false
+    let intervalId: number | null = null
+
+    const stopPolling = () => {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId)
+        intervalId = null
+      }
+    }
+
+    const checkConnection = async () => {
+      if (isCancelled) return
+
+      try {
+        if (!isCancelled) {
+          setConnectionStatus((current) =>
+            current && current.includes('Redirigiendo')
+              ? current
+              : 'Esperando confirmación de WhatsApp...'
+          )
+        }
+
+        const queryParams = new URLSearchParams()
+        if (normalizedUserId) {
+          queryParams.set('user_id', normalizedUserId)
+        }
+
+        const query = queryParams.toString()
+
+        const response = await fetch(
+          `${SERVER_BASE}/api/instance/connectionState/${encodeURIComponent(pollingInstance)}${query ? `?${query}` : ''}`,
+          {
+            method: 'GET',
+            headers: {
+              Accept: 'application/json',
+            },
+          },
+        )
+
+        if (!response.ok) {
+          throw new Error(`Estado ${response.status}`)
+        }
+
+        const raw = await response.text()
+        let parsed: unknown = null
+
+        if (raw) {
+          try {
+            parsed = JSON.parse(raw)
+          } catch {
+            parsed = raw
+          }
+        }
+
+        if (parsed && typeof parsed === 'object') {
+          const parsedRecord = parsed as Record<string, unknown>
+          const discoveredInstance = normalizeStringCandidate(parsedRecord.instance)
+
+          if (discoveredInstance) {
+            pollingInstance = discoveredInstance
+            if (typeof window !== 'undefined' && window.localStorage) {
+              window.localStorage.setItem('instance', discoveredInstance)
+              window.localStorage.setItem('instancia', discoveredInstance)
+            }
+          }
+        }
+
+        const state = extractConnectionState(parsed)
+        const normalizedState = state?.toUpperCase() ?? null
+
+        if (normalizedState && successStates.has(normalizedState)) {
+          stopPolling()
+          if (!isCancelled && !hasRedirected) {
+            setConnectionStatus('Conexión detectada. Redirigiendo al panel...')
+            setHasRedirected(true)
+            navigate('/home-dashboard', { replace: true })
+          }
+          return
+        }
+
+        if (!isCancelled) {
+          setConnectionStatus('Esperando a que confirmes la vinculación en tu WhatsApp...')
+        }
+      } catch (error) {
+        if (isCancelled) return
+        console.error('No se pudo obtener el estado de la instancia', error)
+        setConnectionStatus('No pudimos validar la conexión automáticamente. Reintentando...')
+      }
+    }
+
+    checkConnection()
+    intervalId = window.setInterval(checkConnection, 5000)
+
+    return () => {
+      isCancelled = true
+      stopPolling()
+    }
+  }, [stage, lastLoginPayload, navigate])
 
   async function requestLoginPayload(): Promise<LoginSuccessPayload> {
     const res = await fetch(`${API_BASE}/api/login`, {
@@ -236,11 +489,6 @@ export default function Login() {
     setIsQrLoading(false)
     setQrSrc(null)
     setErrorMessage('No se pudo mostrar la imagen del QR. Intenta generar uno nuevamente.')
-  }
-
-  function handleGoToDashboard() {
-    // Redirección al dashboard
-    navigate('/home-dashboard')
   }
 
   function formatTime(seconds: number): string {
@@ -392,7 +640,7 @@ export default function Login() {
                 <li>Toca "Vincular un dispositivo"</li>
                 <li>Escanea el código QR que se muestra a continuación</li>
                 <li>Espera a que se complete la sincronización</li>
-                <li>Una vez sincronizado, presiona el botón "Ir al Dashboard"</li>
+                <li>Una vez sincronizado, te redirigiremos automáticamente a tu panel</li>
               </ol>
               <p className="login-qr__hint">
                 ⏱️ Tiempo restante: <strong>{formatTime(timeLeft)}</strong>
@@ -426,11 +674,14 @@ export default function Login() {
               </div>
             )}
 
+            {connectionStatus && (
+              <div className="login-alert login-alert--info" role="status">
+                <i className="fas fa-circle-info"></i>
+                <span>{connectionStatus}</span>
+              </div>
+            )}
+
             <div className="login-qr__actions">
-              <button type="button" className="login-dashboard" onClick={handleGoToDashboard}>
-                <i className="fas fa-arrow-right"></i>
-                Ir al Dashboard
-              </button>
               <button type="button" className="login-back" onClick={handleBackToLogin}>
                 <i className="fas fa-arrow-left"></i>
                 Volver al inicio de sesión

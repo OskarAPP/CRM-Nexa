@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\CredencialWhatsappController;
+use App\Http\Controllers\InstanceController;
 
 Route::prefix('credenciales-whatsapp')->group(function () {
     Route::get('/', [CredencialWhatsappController::class, 'index']);
@@ -14,6 +15,7 @@ Route::prefix('credenciales-whatsapp')->group(function () {
 
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/instance/connectionState/{instance}', [InstanceController::class, 'connectionState']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/login/status', [AuthController::class, 'whatsappStatus']);
