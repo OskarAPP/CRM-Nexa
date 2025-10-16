@@ -9,8 +9,6 @@ type SessionSnapshot = {
   token: string | null
 }
 
-type CopyState = 'idle' | 'copied' | 'error'
-
 const DEFAULT_NAME = 'Nexa'
 const DEFAULT_SESSION: SessionSnapshot = {
   name: null,
@@ -70,7 +68,8 @@ const readSessionFromStorage = (): SessionSnapshot => {
 
 export default function HomeDashboard() {
   const [session, setSession] = useState<SessionSnapshot>(() => readSessionFromStorage())
-  const [copyState, setCopyState] = useState<CopyState>('idle')
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState<string | null>(null)
   const navigate = useNavigate()
 
   const refreshSession = useCallback(() => {
@@ -103,14 +102,6 @@ export default function HomeDashboard() {
     return () => window.removeEventListener('storage', handleStorage)
   }, [refreshSession])
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (copyState === 'idle') return
-
-    const timeout = window.setTimeout(() => setCopyState('idle'), copyState === 'copied' ? 2200 : 3200)
-    return () => window.clearTimeout(timeout)
-  }, [copyState])
-
   const displayName = useMemo(() => {
     if (!session.name) return DEFAULT_NAME
     const clean = session.name.trim()
@@ -119,8 +110,6 @@ export default function HomeDashboard() {
     if (!firstWord) return DEFAULT_NAME
     return firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase()
   }, [session.name])
-
-  const fullName = useMemo(() => session.name ?? `${DEFAULT_NAME} CRM`, [session.name])
 
   const timeGreeting = useMemo(() => {
     const hour = new Date().getHours()
@@ -134,58 +123,10 @@ export default function HomeDashboard() {
   const welcomeSubtitle = useMemo(
     () =>
       session.name
-        ? 'Este es tu panel general: métricas, campañas y actividad sincronizadas en tiempo real.'
+        ? 'Explora tus campañas, estadísticas y actividad reciente.'
         : 'Accede con tus credenciales para personalizar este panel con tus datos e integraciones.',
     [session.name]
   )
-
-  const sessionDetails = useMemo(
-    () => [
-      { label: 'ID de cuenta', value: session.id ?? 'No asignado' },
-      { label: 'User ID', value: session.userId ?? 'No asignado' },
-    ],
-    [session.id, session.userId]
-  )
-
-  const maskedToken = useMemo(() => {
-    if (!session.token) return 'No asignado'
-    if (session.token.length <= 14) return session.token
-    return `${session.token.slice(0, 6)}····${session.token.slice(-4)}`
-  }, [session.token])
-
-  const hasSession = useMemo(
-    () => Boolean(session.name || session.id || session.userId || session.token),
-    [session.name, session.id, session.userId, session.token]
-  )
-
-  const integrationHint = useMemo(
-    () =>
-      hasSession
-        ? 'Comparte estos identificadores con tu equipo técnico para conectar automatizaciones y bots.'
-        : 'Una vez que inicies sesión, mostraremos aquí los identificadores para tus integraciones.',
-    [hasSession]
-  )
-
-  const copyLabel = useMemo(
-    () => (copyState === 'copied' ? 'Copiado' : copyState === 'error' ? 'Intenta nuevamente' : 'Copiar token'),
-    [copyState]
-  )
-
-  const handleCopyToken = useCallback(async () => {
-    if (!session.token) return
-    if (typeof navigator === 'undefined' || !navigator.clipboard) {
-      setCopyState('error')
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(session.token)
-      setCopyState('copied')
-    } catch (error) {
-      console.warn('No se pudo copiar el token al portapapeles', error)
-      setCopyState('error')
-    }
-  }, [session.token])
 
   const quickLinks = [
     {
@@ -283,6 +224,53 @@ export default function HomeDashboard() {
     },
   ]
 
+  const handleLogout = useCallback(async () => {
+    if (isLoggingOut) return
+
+    const storedUserId = session.userId ?? (typeof window !== 'undefined' ? sanitizeValue(window.localStorage.getItem('user_id')) : null)
+    if (!storedUserId) {
+      setLogoutError('No se encontró un identificador de usuario en la sesión actual.')
+      return
+    }
+
+    const parsedUserId = Number(storedUserId)
+    if (!Number.isFinite(parsedUserId)) {
+      setLogoutError('El identificador de usuario almacenado no es válido.')
+      return
+    }
+
+    setIsLoggingOut(true)
+    setLogoutError(null)
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+      const response = await fetch(`${API_BASE}/api/logout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: parsedUserId }),
+      })
+
+      if (!response.ok) {
+        const details = await response.text().catch(() => '')
+        setLogoutError(`No se pudo cerrar sesión. HTTP ${response.status}: ${details || response.statusText}`)
+        return
+      }
+
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const storage = window.localStorage
+        ;['nombres', 'nombre', 'Id', 'id', 'user_id', 'token'].forEach((key) => storage.removeItem(key))
+      }
+
+      setSession({ ...DEFAULT_SESSION })
+      navigate('/login', { replace: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      setLogoutError(`Error inesperado al cerrar sesión: ${message}`)
+    } finally {
+      setIsLoggingOut(false)
+    }
+  }, [isLoggingOut, navigate, session.userId])
+
   return (
     <div className="inicio-layout">
       <aside className="inicio-sidebar">
@@ -317,8 +305,16 @@ export default function HomeDashboard() {
         </nav>
 
         <div className="sidebar-footer">
-          <p>Pro tip</p>
-          <span>Integra tu WhatsApp Business API para métricas en tiempo real.</span>
+          <button
+            type="button"
+            className="logout-button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+          >
+            <i className="fas fa-arrow-right-from-bracket" aria-hidden="true"></i>
+            <span>{isLoggingOut ? 'Cerrando sesión…' : 'Cerrar sesión'}</span>
+          </button>
+          {logoutError && <span className="logout-error">{logoutError}</span>}
         </div>
       </aside>
 
