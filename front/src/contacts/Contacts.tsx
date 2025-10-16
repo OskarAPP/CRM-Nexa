@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { ComponentType } from 'react'
 import './contacts.css'
 import TodosModule, { filterTodos } from './modules/TodosModule'
@@ -44,6 +44,14 @@ const FILTER_FUNCTIONS: Record<FilterType, (contacts: Contact[]) => Contact[]> =
   group: filterGroups,
 }
 
+const getStoredUserId = (): string | null => {
+  if (typeof window === 'undefined' || !window.localStorage) return null
+  const raw = window.localStorage.getItem('user_id')
+  if (!raw) return null
+  const trimmed = raw.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
 function Contacts() {
   const [allContacts, setAllContacts] = useState<Contact[]>([])
   const [currentFilter, setCurrentFilter] = useState<FilterType>('all')
@@ -58,9 +66,26 @@ function Contacts() {
   const [showRaw, setShowRaw] = useState(false)
   const [exportSuccessCount, setExportSuccessCount] = useState(0)
   const [filterTotals, setFilterTotals] = useState<FilterTotals | null>(null)
+  const [sessionUserId, setSessionUserId] = useState<number | null>(null)
 
   useEffect(() => {
     ensureStylesLoaded()
+  }, [])
+
+  useEffect(() => {
+    const stored = getStoredUserId()
+    if (!stored) {
+      setErrorMessage('No se encontró un user_id en la sesión actual. Inicia sesión para sincronizar tus contactos.')
+      return
+    }
+
+    const parsed = Number(stored)
+    if (!Number.isFinite(parsed)) {
+      setErrorMessage('El identificador de usuario almacenado no es válido. Inicia sesión nuevamente.')
+      return
+    }
+
+    setSessionUserId(parsed)
   }, [])
 
   useEffect(() => {
@@ -101,33 +126,72 @@ function Contacts() {
     return Array.from(new Set(cleaned))
   }
 
-  const handleFindContacts = async () => {
+  const syncContacts = useCallback(async () => {
+    if (sessionUserId == null) {
+      setErrorMessage('No se encontró un identificador de usuario válido para sincronizar los contactos.')
+      return
+    }
+
     setIsLoading(true)
     setLoadingMode('sync')
     setErrorMessage(null)
     setFilterTotals(null)
+
     try {
       const response = await fetch(`${API_BASE}/api/find-contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ user_id: sessionUserId }),
       })
-      const data: Contact[] = await response.json()
-      if (Array.isArray(data) && data.length > 0) {
-        setAllContacts(data)
+
+      const raw = await response.text()
+      let data: unknown = null
+
+      if (raw) {
+        try {
+          data = JSON.parse(raw)
+        } catch {
+          data = raw
+        }
+      }
+
+      if (!response.ok) {
+        const message =
+          (typeof data === 'object' && data !== null && 'message' in data
+            ? String((data as { message?: unknown }).message ?? '')
+            : '') || response.statusText || 'Error al sincronizar contactos'
+        throw new Error(message)
+      }
+
+      if (Array.isArray(data)) {
+        setAllContacts(data as Contact[])
         setSelectedContacts(new Set())
         setRawData(JSON.stringify(data, null, 2))
-      } else {
-        setAllContacts([])
-        setRawData(JSON.stringify(data, null, 2))
+        return
       }
+
+      if (data && typeof data === 'object' && 'error' in data && (data as { error?: boolean }).error) {
+        const message = (data as { message?: string }).message ?? 'Error al sincronizar contactos'
+        throw new Error(message)
+      }
+
+      const serialized = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+      setAllContacts([])
+      setRawData(serialized || '')
     } catch (err: any) {
-      setErrorMessage(`No se pudo conectar con el servidor: ${err?.message || String(err)}`)
+      setAllContacts([])
+      setRawData('')
+      setErrorMessage(err?.message || 'No se pudo sincronizar los contactos')
     } finally {
       setIsLoading(false)
       setLoadingMode(null)
     }
-  }
+  }, [sessionUserId])
+
+  useEffect(() => {
+    if (sessionUserId == null) return
+    void syncContacts()
+  }, [sessionUserId, syncContacts])
 
   const handleToggleSelection = (jid?: string) => {
     if (!jid) return
@@ -166,6 +230,9 @@ function Contacts() {
     setFilterTotals(null)
     setSelectedContacts(new Set())
     setErrorMessage(null)
+    if (sessionUserId != null) {
+      void syncContacts()
+    }
   }
 
   const handleApplyAdvancedFilters = async () => {
@@ -179,6 +246,11 @@ function Contacts() {
     setActiveAreaCodes(codes)
     setAreaCodesInput(codes.join(', '))
 
+    if (sessionUserId == null) {
+      setErrorMessage('No se encontró un identificador de usuario válido para aplicar filtros. Inicia sesión nuevamente.')
+      return
+    }
+
     setIsLoading(true)
     setLoadingMode('filter')
     setErrorMessage(null)
@@ -186,6 +258,7 @@ function Contacts() {
     try {
       const payload: Record<string, unknown> = {
         country_code: cleanCountry || '521',
+        user_id: sessionUserId,
       }
       if (codes.length > 0) {
         payload.area_codes = codes
@@ -195,10 +268,30 @@ function Contacts() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       })
-      const data: FilterResponse = await response.json()
+      const raw = await response.text()
+      let data: FilterResponse | null = null
+
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as FilterResponse
+        } catch {
+          data = null
+        }
+      }
+
+      if (!response.ok) {
+        const message = data?.message || response.statusText || 'Error al filtrar contactos'
+        throw new Error(message)
+      }
+
+      if (!data || typeof data !== 'object') {
+        throw new Error('Respuesta inesperada del servidor al filtrar contactos')
+      }
+
       if (data.error) {
         throw new Error(data.message || 'Error desconocido al filtrar')
       }
+
       if (data.matched_contacts && data.matched_contacts.length > 0) {
         setAllContacts(data.matched_contacts)
         setSelectedContacts(new Set())
@@ -206,15 +299,15 @@ function Contacts() {
           total: data.total_jids_found ?? data.matched_contacts.length,
           filtered: data.filtered_count ?? data.matched_contacts.length,
         })
-        setRawData(JSON.stringify(data, null, 2))
       } else {
         setAllContacts(data.matched_contacts || [])
-        setRawData(JSON.stringify(data, null, 2))
         setFilterTotals({
           total: data.total_jids_found ?? 0,
           filtered: data.filtered_count ?? 0,
         })
       }
+
+  setRawData(JSON.stringify(data, null, 2))
     } catch (err: any) {
       setErrorMessage(err?.message || 'Error al filtrar')
     } finally {
@@ -297,9 +390,6 @@ function Contacts() {
         </header>
 
         <div className="actions">
-          <button className="btn" onClick={handleFindContacts}>
-            <i className="fas fa-sync-alt"></i> Sincronizar Contactos
-          </button>
           <button className="btn btn-outline" onClick={handleClearFilters}>
             <i className="fas fa-times"></i> Limpiar Filtros
           </button>
