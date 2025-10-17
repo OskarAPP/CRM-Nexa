@@ -118,6 +118,21 @@ function Contacts() {
     return '0 contactos'
   }, [isLoading, visibleContacts.length, allContacts.length])
 
+  const filterLabel = useMemo(() => {
+    if (currentFilter === 'contact') return 'Contactos'
+    if (currentFilter === 'group') return 'Grupos'
+    return 'Todos'
+  }, [currentFilter])
+
+  const syncStatus = isLoading
+    ? loadingMode === 'filter'
+      ? 'Filtrando…'
+      : 'Sincronizando…'
+    : 'Listo'
+
+  const activeAreaCodesLabel = activeAreaCodes.length > 0 ? activeAreaCodes.join(', ') : 'Todos'
+  const statusIcon = isLoading ? 'fa-circle-notch fa-spin' : 'fa-circle-check'
+
   const parseAreaCodes = (value: string) => {
     const cleaned = value
       .split(',')
@@ -373,142 +388,231 @@ function Contacts() {
   }
 
   return (
-    <div className="contacts-app">
+    <div className="contacts-app contacts-layout">
       {exportSuccessCount > 0 && (
         <div className="export-notification">
           <i className="fas fa-check-circle"></i>
           <span>{exportSuccessCount} contactos exportados exitosamente</span>
         </div>
       )}
-      <div className="container">
-        <header>
-          <div className="logo">
-            <i className="fas fa-address-book"></i>
-          </div>
-          <h1>Business Contacts Manager</h1>
-          <p className="subtitle">Acceda y gestione sus contactos profesionales de forma segura y organizada</p>
-        </header>
 
-        <div className="actions">
-          <button className="btn btn-outline" onClick={handleClearFilters}>
-            <i className="fas fa-times"></i> Limpiar Filtros
-          </button>
-          <button className="btn btn-export" onClick={handleExportSelected} disabled={selectedContacts.size === 0}>
-            <i className="fas fa-download"></i> Exportar Seleccionados
-          </button>
+      <aside className="contacts-sidebar">
+        <div className="contacts-sidebar__brand">
+          <span className="contacts-chip"><i className="fas fa-address-card"></i> Gestión de contactos</span>
+          <h2>Directorio centralizado</h2>
+          <p>Sincroniza leads, clasifica segmentos y prepara tus campañas sin salir del panel.</p>
         </div>
 
-        <div className={`selection-info ${selectionInfo.show ? 'show' : ''}`}>
-          <span>{selectionInfo.count}</span> contactos seleccionados
-        </div>
-
-        <div className="filter-container">
+        <div className="contacts-sidebar__filters">
           <button
-            className={`filter-btn ${currentFilter === 'all' ? 'active' : ''}`}
+            type="button"
+            className={`contacts-nav ${currentFilter === 'all' ? 'is-active' : ''}`}
             onClick={() => setCurrentFilter('all')}
           >
-            <i className="fas fa-users"></i> Todos
+            <span className="contacts-nav__icon"><i className="fas fa-layer-group"></i></span>
+            <div>
+              <strong>Todos los registros</strong>
+              <small>Contactos y grupos</small>
+            </div>
           </button>
           <button
-            className={`filter-btn ${currentFilter === 'contact' ? 'active' : ''}`}
+            type="button"
+            className={`contacts-nav ${currentFilter === 'contact' ? 'is-active' : ''}`}
             onClick={() => setCurrentFilter('contact')}
           >
-            <i className="fas fa-user"></i> Contactos
+            <span className="contacts-nav__icon"><i className="fas fa-user"></i></span>
+            <div>
+              <strong>Solo contactos</strong>
+              <small>Perfiles individuales</small>
+            </div>
           </button>
           <button
-            className={`filter-btn ${currentFilter === 'group' ? 'active' : ''}`}
+            type="button"
+            className={`contacts-nav ${currentFilter === 'group' ? 'is-active' : ''}`}
             onClick={() => setCurrentFilter('group')}
           >
-            <i className="fas fa-users"></i> Grupos
+            <span className="contacts-nav__icon"><i className="fas fa-users"></i></span>
+            <div>
+              <strong>Grupos activos</strong>
+              <small>Listas colaborativas</small>
+            </div>
           </button>
         </div>
 
-        <div className="advanced-filters">
-          <div className="filter-section">
-            <h3>Filtros Avanzados</h3>
-            <div className="filter-inputs">
-              <div className="input-group">
-                <label htmlFor="countryCode">
-                  <i className="fas fa-flag"></i> Código de País
-                </label>
-                <input
-                  type="text"
-                  id="countryCode"
-                  placeholder="Ej: 521 (México)"
-                  value={countryCode}
-                  maxLength={5}
-                  onChange={(event) => setCountryCode(event.target.value)}
-                />
-                <small>Por defecto: 521 (México)</small>
-              </div>
-
-              <div className="input-group">
-                <label htmlFor="areaCodes">
-                  <i className="fas fa-map-marker-alt"></i> Códigos de Área
-                </label>
-                <input
-                  type="text"
-                  id="areaCodes"
-                  placeholder="Ej: 999,981,996 (separados por comas)"
-                  value={areaCodesInput}
-                  maxLength={50}
-                  onChange={(event) => setAreaCodesInput(event.target.value)}
-                />
-                <small>Múltiples códigos separados por comas: 999,981,996</small>
-                {activeAreaCodes.length > 0 && (
-                  <div className="area-chips" id="areaChipsContainer">
-                    {activeAreaCodes.map((code) => (
-                      <div className="area-chip" key={code}>
-                        {code}
-                        <button className="remove-chip" onClick={() => removeAreaCode(code)} type="button">
-                          <i className="fas fa-times"></i>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <button className="btn btn-filter" onClick={handleApplyAdvancedFilters}>
-                <i className="fas fa-filter"></i> Aplicar Filtros
-              </button>
-            </div>
+        <div className="contacts-sidebar__card">
+          <div className="contacts-sidebar__card-header">
+            <h3>Estado de la base</h3>
+            <span className={`contacts-status ${isLoading ? 'is-loading' : 'is-ready'}`}>
+              <i className={`fas ${statusIcon}`}></i> {syncStatus}
+            </span>
           </div>
+          <ul className="contacts-sidebar__list">
+            <li>
+              <span>Total sincronizado</span>
+              <strong>{allContacts.length}</strong>
+            </li>
+            <li>
+              <span>Visibles ahora</span>
+              <strong>{visibleContacts.length}</strong>
+            </li>
+            <li>
+              <span>Filtro activo</span>
+              <strong>{filterLabel}</strong>
+            </li>
+            <li>
+              <span>Códigos de área</span>
+              <strong>{activeAreaCodesLabel}</strong>
+            </li>
+            <li>
+              <span>Seleccionados</span>
+              <strong>{selectionInfo.count}</strong>
+            </li>
+          </ul>
         </div>
 
-        <div className="contacts-container">
-          <div className="contacts-header">
-            <h2 className="contacts-title">Mis Contactos</h2>
-            <div className="contacts-actions">
-              <span className="contacts-count" id="count">{contactsCountLabel}</span>
-              <div className="bulk-actions">
-                <button className="btn-bulk" onClick={handleSelectAll}>
-                  <i className="fas fa-check-double"></i> Seleccionar Todos
-                </button>
-                <button className="btn-bulk" onClick={handleDeselectAll}>
-                  <i className="fas fa-times"></i> Deseleccionar Todos
-                </button>
-              </div>
-            </div>
-          </div>
+        <div className="contacts-sidebar__footer">
+          <button type="button" className="contacts-link" onClick={() => void syncContacts()}>
+            <i className="fas fa-sync"></i> Sincronizar contactos
+          </button>
+          <button type="button" className="contacts-link" onClick={handleClearFilters}>
+            <i className="fas fa-rotate"></i> Restablecer filtros
+          </button>
+        </div>
+      </aside>
 
-          <div className="contacts-grid" id="contacts">
-            <ModuleComponent {...moduleProps} />
+      <main className="contacts-main">
+        <header className="contacts-hero">
+          <div>
+            <h1>Gestor de contactos inteligente</h1>
+            <p>Organiza audiencias, aplica filtros avanzados y exporta segmentos listos para campañas.</p>
           </div>
+          <div className="contacts-hero__meta">
+            <span className="contacts-count">{contactsCountLabel}</span>
+            {selectionInfo.show && <span className="contacts-selection">{selectionInfo.count} seleccionados</span>}
+          </div>
+        </header>
+
+        <div className="contacts-hero__actions">
+          <button type="button" className="contacts-ghost" onClick={handleClearFilters}>
+            <i className="fas fa-broom"></i> Limpiar filtros
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={handleExportSelected}
+            disabled={selectedContacts.size === 0}
+          >
+            <i className="fas fa-download"></i> Exportar seleccionados
+          </button>
         </div>
 
-        <div className="raw-data">
-          <div className="raw-header">
-            <h3 className="raw-title">Datos Técnicos</h3>
-            <button className="raw-toggle" onClick={toggleRawData}>
-              <i className="fas fa-code"></i> <span>{showRaw ? 'Ocultar JSON' : 'Mostrar JSON'}</span>
+        <section className="contacts-card contacts-filters">
+          <div className="contacts-card__header">
+            <div>
+              <h2>Filtros avanzados</h2>
+              <p>Define criterios por país y códigos de área para segmentar con precisión.</p>
+            </div>
+            <button type="button" className="btn btn-primary" onClick={handleApplyAdvancedFilters}>
+              <i className="fas fa-filter"></i> Aplicar filtros
             </button>
           </div>
-          <div className={`raw-content ${showRaw ? 'show' : ''}`}>
-            <pre>{rawData}</pre>
+          <div className="contacts-filter-grid">
+            <div className="input-group">
+              <label htmlFor="countryCode">
+                <i className="fas fa-flag"></i> Código de país
+              </label>
+              <input
+                type="text"
+                id="countryCode"
+                placeholder="Ej: 521 (México)"
+                value={countryCode}
+                maxLength={5}
+                onChange={(event) => setCountryCode(event.target.value)}
+              />
+              <small>Predeterminado: 521 (México)</small>
+            </div>
+
+            <div className="input-group">
+              <label htmlFor="areaCodes">
+                <i className="fas fa-map-marker-alt"></i> Códigos de área
+              </label>
+              <input
+                type="text"
+                id="areaCodes"
+                placeholder="Ej: 999,981,996"
+                value={areaCodesInput}
+                maxLength={50}
+                onChange={(event) => setAreaCodesInput(event.target.value)}
+              />
+              <small>Separe múltiples valores con comas</small>
+              {activeAreaCodes.length > 0 && (
+                <div className="area-chips" id="areaChipsContainer">
+                  {activeAreaCodes.map((code) => (
+                    <div className="area-chip" key={code}>
+                      {code}
+                      <button className="remove-chip" onClick={() => removeAreaCode(code)} type="button">
+                        <i className="fas fa-times"></i>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        <section className="contacts-body">
+          <article className="contacts-card contacts-list">
+            <div className="contacts-list__header">
+              <div>
+                <span className="contacts-chip"><i className="fas fa-database"></i> Segmento activo</span>
+                <h2>Mis contactos</h2>
+                <p className="contacts-list__hint">Selecciona registros individuales o grupos y prepáralos para exportación.</p>
+              </div>
+              <div className="contacts-list__actions">
+                <button type="button" className="contacts-ghost" onClick={handleSelectAll}>
+                  <i className="fas fa-check-double"></i> Seleccionar todos
+                </button>
+                <button type="button" className="contacts-ghost" onClick={handleDeselectAll}>
+                  <i className="fas fa-times"></i> Deseleccionar
+                </button>
+              </div>
+            </div>
+
+            {filterTotals && (
+              <div className="contacts-list__summary">
+                <div>
+                  <span>Total encontrados</span>
+                  <strong>{filterTotals.total}</strong>
+                </div>
+                <div>
+                  <span>Coincidencias filtradas</span>
+                  <strong>{filterTotals.filtered}</strong>
+                </div>
+              </div>
+            )}
+
+            <div className="contacts-grid" id="contacts">
+              <ModuleComponent {...moduleProps} />
+            </div>
+          </article>
+
+          <aside className="contacts-card contacts-raw">
+            <div className="contacts-card__header">
+              <div>
+                <h2>Datos técnicos</h2>
+                <p>Consulta la respuesta del servicio para diagnósticos y soporte.</p>
+              </div>
+              <button type="button" className="contacts-link" onClick={toggleRawData}>
+                <i className="fas fa-code"></i> {showRaw ? 'Ocultar JSON' : 'Mostrar JSON'}
+              </button>
+            </div>
+            <div className={`raw-content ${showRaw ? 'show' : ''}`}>
+              {showRaw ? <pre>{rawData}</pre> : <p className="raw-placeholder">Activa la vista para inspeccionar el JSON recibido.</p>}
+            </div>
+          </aside>
+        </section>
+      </main>
     </div>
   )
 }
