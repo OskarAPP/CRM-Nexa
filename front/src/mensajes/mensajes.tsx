@@ -50,11 +50,11 @@ function MessageManager() {
     }
     return (
       <div className="type-info">
-        <div>
-          <span className="type-badge media"><i className={`fas ${mediaIcon(mediaType)}`}></i>{mediaType.toUpperCase()}</span>
-          <span className="type-badge mime"><i className="fas fa-code"></i>{mimeType}</span>
-        </div>
-        <small style={{ marginTop: '.5rem', color: 'var(--secondary)' }}>Detectado automáticamente desde el archivo</small>
+            <div>
+              <span className="type-badge media"><i className={`fas ${mediaIcon(mediaType)}`}></i>{mediaType.toUpperCase()}</span>
+              <span className="type-badge mime"><i className="fas fa-code"></i>{mimeType}</span>
+            </div>
+            <small className="muted" style={{ marginTop: '.5rem' }}>Detectado automáticamente desde el archivo</small>
       </div>
     )
   }, [mediaType, mimeType])
@@ -235,167 +235,290 @@ function MessageManager() {
   }
 
   return (
-    <section className="mensajes">
-      <div className="container">
-        <header>
-          <div className="logo"><i className="fas fa-comment-dots"></i></div>
-          <h1>Business Message Manager</h1>
-          <p className="subtitle">Envíe mensajes y medios a sus contactos de WhatsApp de forma profesional</p>
+    <div className="mensajes mensajes-layout">
+      <aside className="mensajes-sidebar">
+        <div className="mensajes-sidebar__brand">
+            <span className="mensajes-chip"><i className="fas fa-wand-magic-sparkles"></i> Centro de campañas</span>
+          <h2>Mensajería inteligente</h2>
+          <p>Coordina envíos masivos y adjunta contenido enriquecido sin salir del panel.</p>
+        </div>
+
+        <div className="mensajes-sidebar__actions">
+          <button
+            type="button"
+            className={`mensajes-nav ${activeTab === 'texto' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('texto')}
+          >
+            <span className="mensajes-nav__icon"><i className="fas fa-font"></i></span>
+            <div>
+              <strong>Mensajes de texto</strong>
+              <small>Plantillas personalizadas y envíos manuales</small>
+            </div>
+          </button>
+          <button
+            type="button"
+            className={`mensajes-nav ${activeTab === 'media' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('media')}
+          >
+            <span className="mensajes-nav__icon"><i className="fas fa-photo-film"></i></span>
+            <div>
+              <strong>Mensajes multimedia</strong>
+              <small>Documentos, imágenes, audio o video</small>
+            </div>
+          </button>
+        </div>
+
+        <div className="mensajes-sidebar__card">
+          <div className="mensajes-sidebar__card-header">
+            <h3>Estatus de preparación</h3>
+            <span className="mensajes-status"><i className="fas fa-circle-notch"></i> Activo</span>
+          </div>
+          <ul className="mensajes-sidebar__list">
+            <li>
+              <span>Texto manual</span>
+              <strong>{isManualTexto ? 'Editable' : 'CSV'}</strong>
+            </li>
+            <li>
+              <span>Números para texto</span>
+              <strong>{numerosTexto ? numerosTexto.split(',').filter(Boolean).length : 0}</strong>
+            </li>
+            <li>
+              <span>Multimedia manual</span>
+              <strong>{isManualMedia ? 'Editable' : 'CSV'}</strong>
+            </li>
+            <li>
+              <span>Números multimedia</span>
+              <strong>{numerosMedia ? numerosMedia.split(',').filter(Boolean).length : 0}</strong>
+            </li>
+          </ul>
+        </div>
+
+        <div className="mensajes-sidebar__footer">
+          <button type="button" className="mensajes-link" onClick={() => setShowDetails(true)}>
+            <i className="fas fa-code"></i> Ver detalles técnicos
+          </button>
+          <button type="button" className="mensajes-link" onClick={() => setShowDetails(false)}>
+            <i className="fas fa-eye-slash"></i> Ocultar detalles
+          </button>
+        </div>
+      </aside>
+
+      <main className="mensajes-main">
+        <header className="mensajes-header">
+          <div>
+            <h1>Orquestador de mensajes</h1>
+            <p>Gestiona campañas, valida destinatarios y supervisa resultados en tiempo real.</p>
+          </div>
+          <div className="mensajes-header__actions">
+            <button type="button" className="mensajes-ghost" onClick={() => setActiveTab('texto')}>
+              <i className="fas fa-bolt"></i> Envío rápido
+            </button>
+            <button type="button" className="mensajes-ghost" onClick={() => setActiveTab('media')}>
+              <i className="fas fa-upload"></i> Adjuntar medios
+            </button>
+          </div>
         </header>
 
-        <div className="content-grid">
-          <div className="message-container">
-          <div className="tabs">
-            <div className={`tab ${activeTab === 'texto' ? 'active' : ''}`} onClick={() => setActiveTab('texto')}>
-              <i className="fas fa-font"></i> Mensaje de Texto
+        <div className="mensajes-body">
+          <section className="mensajes-card">
+            <div className="mensajes-tabs" role="tablist" aria-label="Tipo de envío">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'texto'}
+                className={`mensajes-tab ${activeTab === 'texto' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('texto')}
+              >
+                <i className="fas fa-align-left"></i>
+                <span>Mensaje de texto</span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'media'}
+                className={`mensajes-tab ${activeTab === 'media' ? 'is-active' : ''}`}
+                onClick={() => setActiveTab('media')}
+              >
+                <i className="fas fa-images"></i>
+                <span>Mensaje con medios</span>
+              </button>
             </div>
-            <div className={`tab ${activeTab === 'media' ? 'active' : ''}`} onClick={() => setActiveTab('media')}>
-              <i className="fas fa-photo-video"></i> Medios
-            </div>
-          </div>
 
-          {/* Texto Tab */}
-          <div className={`tab-content ${activeTab === 'texto' ? 'active' : ''}`}>
-            <div className="form-group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label htmlFor="numeros-texto"><i className="fas fa-phone"></i> Números de destino</label>
-                <button
-                  type="button"
-                  aria-label="Modo manual/automático"
-                  title="Modo manual/automático"
-                  onClick={() => setIsManualTexto((v) => !v)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.5rem' }}
-                >
-                  <i className={`fas ${isManualTexto ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
-                  <span style={{ fontSize: '.9rem' }}>{isManualTexto ? 'Manual' : 'Automático'}</span>
+            <div className="mensajes-content" role="tabpanel" hidden={activeTab !== 'texto'}>
+              <div className="field-group">
+                <div className="field-group__header">
+                  <label htmlFor="numeros-texto"><i className="fas fa-phone"></i> Números de destino</label>
+                  <button
+                    type="button"
+                    className="mode-toggle"
+                    onClick={() => setIsManualTexto((value) => !value)}
+                  >
+                    <i className={`fas ${isManualTexto ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                    <span>{isManualTexto ? 'Modo manual' : 'Modo CSV'}</span>
+                  </button>
+                </div>
+                <input
+                  id="numeros-texto"
+                  className={`input-field ${!isManualTexto ? 'auto-mode' : ''}`}
+                  disabled={!isManualTexto}
+                  value={numerosTexto}
+                  onChange={(event) => setNumerosTexto(event.target.value)}
+                  placeholder="Ingrese números separados por comas"
+                />
+                {!isManualTexto && (
+                  <div className="csv-row">
+                    <button type="button" className="btn" onClick={() => csvInputTextoRef.current?.click()}>
+                      <i className="fas fa-file-csv"></i> Cargar CSV
+                    </button>
+                    <span className="csv-count">
+                      {csvCountTexto > 0 ? `${csvCountTexto} números cargados` : 'Importe un CSV con una columna de números'}
+                    </span>
+                    {csvCountTexto > 0 && (
+                      <button type="button" className="btn btn-outline" onClick={clearCsvTexto}>
+                        <i className="fas fa-trash"></i> Descartar
+                      </button>
+                    )}
+                    <input ref={csvInputTextoRef} type="file" accept=".csv" className="hidden" onChange={handleCsvTexto} />
+                  </div>
+                )}
+                <p className="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
+              </div>
+
+              <div className="field-group">
+                <label htmlFor="mensaje"><i className="fas fa-envelope"></i> Mensaje</label>
+                <textarea
+                  id="mensaje"
+                  className="textarea-field"
+                  value={mensaje}
+                  onChange={(event) => setMensaje(event.target.value)}
+                  placeholder="Escriba su mensaje aquí"
+                />
+              </div>
+
+              <div className="actions">
+                <button id="send-btn" className="btn" onClick={enviarMensajes}>
+                  <i className="fas fa-paper-plane"></i> Enviar mensajes
                 </button>
               </div>
-              <input id="numeros-texto" className={`input-field ${!isManualTexto ? 'auto-mode' : ''}`} disabled={!isManualTexto} value={numerosTexto} onChange={(e) => setNumerosTexto(e.target.value)} placeholder="Ingrese números separados por comas" />
-              {!isManualTexto && (
-                <div className="csv-row">
-                  <button type="button" className="btn" onClick={() => csvInputTextoRef.current?.click()}><i className="fas fa-file-csv"></i> Cargar CSV</button>
-                  <span className="csv-count">{csvCountTexto > 0 ? `${csvCountTexto} números cargados` : 'Importe un CSV con una columna de números'}</span>
-                  {csvCountTexto > 0 && (
-                    <button type="button" onClick={clearCsvTexto} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '.5rem .75rem', borderRadius: '8px', cursor: 'pointer', marginLeft: 'auto' }}>
-                      <i className="fas fa-trash"></i> Descartar
-                    </button>
-                  )}
-                  <input ref={csvInputTextoRef} type="file" accept=".csv" className="hidden" onChange={handleCsvTexto} />
+            </div>
+
+            <div className="mensajes-content" role="tabpanel" hidden={activeTab !== 'media'}>
+              <div className="field-group">
+                <div className="field-group__header">
+                  <label htmlFor="media-numeros"><i className="fas fa-phone"></i> Números de destino</label>
+                  <button
+                    type="button"
+                    className="mode-toggle"
+                    onClick={() => setIsManualMedia((value) => !value)}
+                  >
+                    <i className={`fas ${isManualMedia ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
+                    <span>{isManualMedia ? 'Modo manual' : 'Modo CSV'}</span>
+                  </button>
                 </div>
-              )}
-              <p className="input-hint">Separe los números con comas. Incluya el código de país (ej. 521234567890)</p>
-            </div>
+                <input
+                  id="media-numeros"
+                  className={`input-field ${!isManualMedia ? 'auto-mode' : ''}`}
+                  disabled={!isManualMedia}
+                  value={numerosMedia}
+                  onChange={(event) => setNumerosMedia(event.target.value)}
+                  placeholder="Ingrese números separados por comas"
+                />
+                {!isManualMedia && (
+                  <div className="csv-row">
+                    <button type="button" className="btn" onClick={() => csvInputMediaRef.current?.click()}>
+                      <i className="fas fa-file-csv"></i> Cargar CSV
+                    </button>
+                    <span className="csv-count">
+                      {csvCountMedia > 0 ? `${csvCountMedia} números cargados` : 'Importe un CSV con una columna de números'}
+                    </span>
+                    {csvCountMedia > 0 && (
+                      <button type="button" className="btn btn-outline" onClick={clearCsvMedia}>
+                        <i className="fas fa-trash"></i> Descartar
+                      </button>
+                    )}
+                    <input ref={csvInputMediaRef} type="file" accept=".csv" className="hidden" onChange={handleCsvMedia} />
+                  </div>
+                )}
+                <p className="input-hint">Separe los números con comas. Incluya el código de país.</p>
+              </div>
 
-            <div className="form-group">
-              <label htmlFor="mensaje"><i className="fas fa-envelope"></i> Mensaje</label>
-              <textarea id="mensaje" className="textarea-field" value={mensaje} onChange={(e) => setMensaje(e.target.value)} placeholder="Escriba su mensaje aquí" />
-            </div>
+              <div className="field-grid">
+                <div className="field-group">
+                  <label><i className="fas fa-info-circle"></i> Tipo detectado</label>
+                  <div className="type-display">{autoTypeNode}</div>
+                </div>
+                <div className="field-group">
+                  <label htmlFor="mediaFile"><i className="fas fa-upload"></i> Seleccionar archivo</label>
+                  <input ref={fileInputRef} type="file" id="mediaFile" className="input-field" onChange={handleFileChange} />
+                  <p className="input-hint">Seleccione el archivo que desea enviar</p>
+                </div>
+              </div>
 
-            <div className="actions">
-              <button id="send-btn" className="btn" onClick={enviarMensajes}>
-                <i className="fas fa-paper-plane"></i> Enviar Mensajes
-              </button>
-            </div>
-          </div>
+              <div className="hidden">
+                <input type="text" readOnly value={mediaBase64} aria-hidden />
+              </div>
 
-          {/* Media Tab */}
-          <div className={`tab-content ${activeTab === 'media' ? 'active' : ''}`}>
-            <div className="form-group">
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <label htmlFor="media-numeros"><i className="fas fa-phone"></i> Números de destino</label>
-                <button
-                  type="button"
-                  aria-label="Modo manual/automático"
-                  title="Modo manual/automático"
-                  onClick={() => setIsManualMedia((v) => !v)}
-                  style={{ background: 'transparent', border: 'none', color: 'var(--secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '.5rem' }}
-                >
-                  <i className={`fas ${isManualMedia ? 'fa-toggle-on' : 'fa-toggle-off'}`}></i>
-                  <span style={{ fontSize: '.9rem' }}>{isManualMedia ? 'Manual' : 'Automático'}</span>
+              <div className="field-grid">
+                <div className="field-group">
+                  <label htmlFor="fileName"><i className="fas fa-file-signature"></i> Nombre del archivo</label>
+                  <input
+                    id="fileName"
+                    className="input-field"
+                    value={fileName}
+                    onChange={(event) => setFileName(event.target.value)}
+                    placeholder="mi_archivo.jpg"
+                  />
+                </div>
+                <div className="field-group">
+                  <label htmlFor="caption"><i className="fas fa-comment"></i> Leyenda (opcional)</label>
+                  <textarea
+                    id="caption"
+                    className="textarea-field"
+                    value={caption}
+                    onChange={(event) => setCaption(event.target.value)}
+                    placeholder="Escriba una descripción para el medio"
+                  />
+                </div>
+              </div>
+
+              <div className="media-preview">
+                <p><i className="fas fa-eye"></i> Vista previa del archivo</p>
+                <div id="preview-content">{renderPreview(mediaType, mediaBase64, mimeType)}</div>
+              </div>
+
+              <div className="actions">
+                <button id="send-media-btn" className="btn btn-secondary" onClick={enviarMedios}>
+            <i className="fas fa-photo-film"></i> Enviar medios
                 </button>
               </div>
-              <input id="media-numeros" className={`input-field ${!isManualMedia ? 'auto-mode' : ''}`} disabled={!isManualMedia} value={numerosMedia} onChange={(e) => setNumerosMedia(e.target.value)} placeholder="Ingrese números separados por comas" />
-              {!isManualMedia && (
-                <div className="csv-row">
-                  <button type="button" className="btn" onClick={() => csvInputMediaRef.current?.click()}><i className="fas fa-file-csv"></i> Cargar CSV</button>
-                  <span className="csv-count">{csvCountMedia > 0 ? `${csvCountMedia} números cargados` : 'Importe un CSV con una columna de números'}</span>
-                  {csvCountMedia > 0 && (
-                    <button type="button" onClick={clearCsvMedia} style={{ background: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', padding: '.5rem .75rem', borderRadius: '15px', cursor: 'pointer', marginLeft: 'auto' }}>
-                      <i className="fas fa-trash"></i> Descartar
-                    </button>
-                  )}
-                  <input ref={csvInputMediaRef} type="file" accept=".csv" className="hidden" onChange={handleCsvMedia} />
-                </div>
-              )}
-              <p className="input-hint">Separe los números con comas. Incluya el código de país</p>
             </div>
+          </section>
 
-            <div className="form-group">
-              <label><i className="fas fa-info-circle"></i> Tipo detectado</label>
-              <div className="type-display">{autoTypeNode}</div>
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="mediaFile"><i className="fas fa-upload"></i> Seleccionar archivo</label>
-              <input ref={fileInputRef} type="file" id="mediaFile" className="input-field" onChange={handleFileChange} />
-              <p className="input-hint">Seleccione el archivo que desea enviar</p>
-            </div>
-
-            <div className="hidden">
-              <input type="text" readOnly value={mediaBase64} aria-hidden />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="fileName"><i className="fas fa-file-signature"></i> Nombre del Archivo</label>
-              <input id="fileName" className="input-field" value={fileName} onChange={(e) => setFileName(e.target.value)} placeholder="mi_archivo.jpg" />
-            </div>
-
-            <div className="form-group">
-              <label htmlFor="caption"><i className="fas fa-comment"></i> Leyenda (opcional)</label>
-              <textarea id="caption" className="textarea-field" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Escriba una descripción para el medio" />
-            </div>
-
-            <div className="media-preview">
-              <p><i className="fas fa-eye"></i> Vista previa del archivo:</p>
-              <div id="preview-content">
-                {renderPreview(mediaType, mediaBase64, mimeType)}
+          <section className="mensajes-card mensajes-results">
+            <div className="results-header">
+              <div>
+                <span className="results-chip"><i className="fas fa-chart-bar"></i> Resultados</span>
+                <h2 className="results-title">Resumen del envío</h2>
+                <p>Consulta rápidamente el estado general y profundiza en los detalles técnicos cuando lo necesites.</p>
+              </div>
+              <div className="results-actions">
+                <button className="btn btn-outline" onClick={() => setShowDetails((value) => !value)}>
+                  <i className="fas fa-info-circle"></i> {showDetails ? 'Ocultar detalles' : 'Ver detalles'}
+                </button>
+                <button className="btn btn-outline" onClick={clearResults}>
+                  <i className="fas fa-trash"></i> Limpiar
+                </button>
               </div>
             </div>
 
-            <div className="actions">
-              <button id="send-media-btn" className="btn btn-secondary" onClick={enviarMedios}>
-                <i className="fas fa-photo-video"></i> Enviar Medios
-              </button>
-            </div>
-          </div>
-          </div>
-
-          <div className="results-container">
-          <div className="results-header">
-            <h2 className="results-title"><i className="fas fa-list-alt"></i> Resultados del Envío</h2>
-            <div className="results-actions">
-              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '.9rem' }} onClick={() => setShowDetails((v) => !v)}>
-                <i className="fas fa-info-circle"></i> {showDetails ? 'Ocultar detalles' : 'Ver detalles'}
-              </button>
-              <button className="btn" style={{ padding: '0.5rem 1rem', fontSize: '.9rem' }} onClick={clearResults}>
-                <i className="fas fa-trash"></i> Limpiar
-              </button>
-            </div>
-          </div>
-
-          {/* Summary view */}
-          <div className="results-summary">
-            {renderSummary(resultText)}
-          </div>
-
-          {/* Technical details (raw) */}
-          {showDetails && (
-            <pre className="results-content" aria-label="Detalles técnicos">{resultText}</pre>
-          )}
-          </div>
+            <div className="results-summary">{renderSummary(resultText)}</div>
+            {showDetails && (
+              <pre className="results-content" aria-label="Detalles técnicos">{resultText}</pre>
+            )}
+          </section>
         </div>
-      </div>
-    </section>
+      </main>
+    </div>
   )
 }
 
