@@ -539,17 +539,30 @@ label i {
   justify-content: space-between;
   gap: 22px;
   align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.results-header > div:first-child {
+  flex: 1 1 240px;
+  min-width: 0;
 }
 
 .results-header p {
   margin: 6px 0 0;
   color: var(--mensajes-muted);
-  max-width: 320px;
+  max-width: 100%;
 }
 
 .results-actions {
   display: flex;
-  gap: 10px;
+  gap: 3px;
+}
+
+.results-actions .btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  border-radius: 10px;
+  gap: 6px;
 }
 
 .results-chip {
@@ -779,7 +792,7 @@ label i {
   .field-grid {
     grid-template-columns: 1fr;
   }
-  .results-actions {
+  .results-actions {  
     flex-wrap: wrap;
   }
 }
