@@ -1,0 +1,4 @@
+- [ ] Analyze HomeDashboard layout and Mensajes functionality
+- [ ] Redesign mensajes.tsx structure using dashboard styling
+- [ ] Update mensajes.css to match HomeDashboard theme
+- [ ] Run frontend build
