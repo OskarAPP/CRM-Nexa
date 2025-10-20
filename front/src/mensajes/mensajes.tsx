@@ -362,8 +362,9 @@ function MessageManager() {
               </button>
             </div>
 
-            <div className="mensajes-content" role="tabpanel" hidden={activeTab !== 'texto'}>
-              <div className="field-group">
+            {activeTab === 'texto' && (
+              <div className="mensajes-content" role="tabpanel" aria-hidden={false}>
+                <div className="field-group">
                 <div className="field-group__header">
                   <label htmlFor="numeros-texto"><i className="fas fa-phone"></i> Números de destino</label>
                   <button
@@ -418,10 +419,12 @@ function MessageManager() {
                   <i className="fas fa-paper-plane"></i> Enviar mensajes
                 </button>
               </div>
-            </div>
+              </div>
+            )}
 
-            <div className="mensajes-content" role="tabpanel" hidden={activeTab !== 'media'}>
-              <div className="field-group">
+            {activeTab === 'media' && (
+              <div className="mensajes-content" role="tabpanel" aria-hidden={false}>
+                <div className="field-group">
                 <div className="field-group__header">
                   <label htmlFor="media-numeros"><i className="fas fa-phone"></i> Números de destino</label>
                   <button
@@ -509,7 +512,8 @@ function MessageManager() {
             <i className="fas fa-photo-film"></i> Enviar medios
                 </button>
               </div>
-            </div>
+              </div>
+            )}
           </section>
 
           <section className="mensajes-card mensajes-results">
