@@ -1,8 +1,146 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 import './mensajes.css'
 
 type TabKey = 'texto' | 'media'
 type MediaType = 'image' | 'video' | 'audio' | 'document'
+
+type TemplateFormMode = 'create' | 'edit'
+
+interface TemplateBase {
+  id: string
+  userId: number | null
+  name: string
+  description?: string
+  type: TabKey
+  createdAt: string
+  updatedAt: string
+}
+
+interface TextTemplate extends TemplateBase {
+  type: 'texto'
+  payload: {
+    numeros: string
+    mensaje: string
+    isManual: boolean
+  }
+}
+
+interface MediaTemplate extends TemplateBase {
+  type: 'media'
+  payload: {
+    numeros: string
+    caption: string
+    fileName: string
+    mediaBase64: string
+    mediaType: MediaType
+    mimeType: string
+    isManual: boolean
+  }
+}
+
+type MessageTemplate = TextTemplate | MediaTemplate
+
+interface TemplateFormState {
+  open: boolean
+  mode: TemplateFormMode
+  templateId: string | null
+  name: string
+  description: string
+  type: TabKey
+}
+
+const TEMPLATE_STORAGE_KEY = 'crm-nexa:mensajes:templates:v1'
+
+function generateTemplateId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function isMessageTemplate(value: any): value is MessageTemplate {
+  if (!value || typeof value !== 'object') return false
+  const baseValid = typeof value.id === 'string'
+    && (typeof value.userId === 'number' || value.userId == null)
+    && typeof value.name === 'string'
+    && typeof value.type === 'string'
+    && typeof value.createdAt === 'string'
+    && typeof value.updatedAt === 'string'
+  if (!baseValid) return false
+  if (value.type === 'texto') {
+    const payload = value.payload
+    return payload
+      && typeof payload === 'object'
+      && typeof payload.numeros === 'string'
+      && typeof payload.mensaje === 'string'
+      && typeof payload.isManual === 'boolean'
+  }
+  if (value.type === 'media') {
+    const payload = value.payload
+    return payload
+      && typeof payload === 'object'
+      && typeof payload.numeros === 'string'
+      && typeof payload.caption === 'string'
+      && typeof payload.fileName === 'string'
+      && typeof payload.mediaBase64 === 'string'
+      && typeof payload.mediaType === 'string'
+      && typeof payload.mimeType === 'string'
+      && typeof payload.isManual === 'boolean'
+  }
+  return false
+}
+
+function normalizeTemplate(value: any): MessageTemplate | null {
+  if (!isMessageTemplate(value)) return null
+  const base: TemplateBase = {
+    id: value.id,
+    userId: typeof value.userId === 'number' ? value.userId : null,
+    name: value.name,
+    description: typeof value.description === 'string' ? value.description : '',
+    type: value.type,
+    createdAt: value.createdAt,
+    updatedAt: value.updatedAt,
+  }
+  if (value.type === 'texto') {
+    return {
+      ...base,
+      type: 'texto',
+      payload: {
+        numeros: value.payload.numeros,
+        mensaje: value.payload.mensaje,
+        isManual: value.payload.isManual,
+      },
+    }
+  }
+  return {
+    ...base,
+    type: 'media',
+    payload: {
+      numeros: value.payload.numeros,
+      caption: value.payload.caption,
+      fileName: value.payload.fileName,
+      mediaBase64: value.payload.mediaBase64,
+      mediaType: value.payload.mediaType as MediaType,
+      mimeType: value.payload.mimeType,
+      isManual: value.payload.isManual,
+    },
+  }
+}
+
+function estimateBase64SizeKb(base64: string): number {
+  if (!base64) return 0
+  const bytes = Math.ceil((base64.length * 3) / 4)
+  return Math.ceil(bytes / 1024)
+}
+
+function countNumbersFromString(value: string): number {
+  return value
+    .split(',')
+    .map((n) => n.trim())
+    .filter(Boolean)
+    .length
+}
 
 export default function Mensajes() {
   return <MessageManager />
@@ -43,6 +181,19 @@ function MessageManager() {
   // Resultados
   const [resultText, setResultText] = useState('// Los resultados de sus envíos aparecerán aquí')
   const [showDetails, setShowDetails] = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+  const [templates, setTemplates] = useState<MessageTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [templateFilter, setTemplateFilter] = useState<'all' | TabKey>('all')
+  const [templateStatus, setTemplateStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [templateForm, setTemplateForm] = useState<TemplateFormState>(() => ({
+    open: false,
+    mode: 'create',
+    templateId: null,
+    name: '',
+    description: '',
+    type: 'texto',
+  }))
 
   const resolveUserId = useCallback((): number | null => {
     if (typeof window === 'undefined') return null
@@ -57,6 +208,36 @@ function MessageManager() {
       return null
     }
   }, [])
+
+  useEffect(() => {
+    setCurrentUserId(resolveUserId())
+  }, [resolveUserId])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const raw = window.localStorage.getItem(TEMPLATE_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed)) return
+      const normalized = parsed
+        .map((value) => normalizeTemplate(value))
+        .filter((tpl): tpl is MessageTemplate => tpl !== null)
+      setTemplates(normalized)
+    } catch {
+      // Ignorar plantillas corruptas guardadas previamente
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!templateStatus) return
+    if (typeof window === 'undefined') return
+    const timeout = window.setTimeout(() => setTemplateStatus(null), 4000)
+    return () => window.clearTimeout(timeout)
+  }, [templateStatus])
+
+  const dateFormatter = useMemo(() => new Intl.DateTimeFormat('es-MX', { dateStyle: 'medium', timeStyle: 'short' }), [])
+  const shortNameFormatter = useMemo(() => new Intl.DateTimeFormat('es-MX', { dateStyle: 'short', timeStyle: 'short' }), [])
 
   const autoTypeNode = useMemo(() => {
     if (!mimeType) {
@@ -73,6 +254,93 @@ function MessageManager() {
     )
   }, [mediaType, mimeType])
 
+  const buildDefaultTemplateName = useCallback((type: TabKey) => {
+    const now = new Date()
+    const prefix = type === 'texto' ? 'Mensaje de texto' : 'Mensaje multimedia'
+    try {
+      return `${prefix} · ${shortNameFormatter.format(now)}`
+    } catch {
+      return `${prefix} · ${now.toLocaleString()}`
+    }
+  }, [shortNameFormatter])
+
+  const formatTimestamp = useCallback((value: string) => {
+    try {
+      return dateFormatter.format(new Date(value))
+    } catch {
+      return value
+    }
+  }, [dateFormatter])
+
+  const persistTemplates = useCallback((next: MessageTemplate[]) => {
+    if (typeof window === 'undefined') return
+    try {
+      window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
+    } catch {
+      setTemplateStatus({ type: 'error', message: 'No se pudo actualizar el almacenamiento local de plantillas.' })
+    }
+  }, [])
+
+  const updateTemplates = useCallback((updater: (prev: MessageTemplate[]) => MessageTemplate[]) => {
+    setTemplates((prev) => {
+      const next = updater(prev)
+      persistTemplates(next)
+      return next
+    })
+  }, [persistTemplates])
+
+  const templatesForCurrentUser = useMemo(() => {
+    return templates.filter((tpl) => {
+      if (tpl.userId == null) return true
+      return currentUserId != null && tpl.userId === currentUserId
+    })
+  }, [templates, currentUserId])
+
+  const templateCounts = useMemo(() => {
+    const texto = templatesForCurrentUser.filter((tpl) => tpl.type === 'texto').length
+    const media = templatesForCurrentUser.filter((tpl) => tpl.type === 'media').length
+    return {
+      all: templatesForCurrentUser.length,
+      texto,
+      media,
+    }
+  }, [templatesForCurrentUser])
+
+  const visibleTemplates = useMemo(() => {
+    const filtered = templateFilter === 'all'
+      ? templatesForCurrentUser
+      : templatesForCurrentUser.filter((tpl) => tpl.type === templateFilter)
+    return filtered
+      .slice()
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+  }, [templatesForCurrentUser, templateFilter])
+
+  const currentTemplateNumbersCount = useMemo(() => {
+    const source = templateForm.type === 'texto' ? numerosTexto : numerosMedia
+    return countNumbersFromString(source)
+  }, [templateForm.type, numerosTexto, numerosMedia])
+
+  const templateNumbersSource = templateForm.type === 'texto' ? numerosTexto : numerosMedia
+
+  const templateNumbersSample = useMemo(() => {
+    const values = templateNumbersSource
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean)
+    return {
+      list: values.slice(0, 3),
+      hasMore: values.length > 3,
+    }
+  }, [templateNumbersSource])
+
+  const templateMediaSizeKb = useMemo(() => {
+    if (templateForm.type !== 'media') return 0
+    return estimateBase64SizeKb(mediaBase64)
+  }, [templateForm.type, mediaBase64])
+
+  const isEditingTemplate = templateForm.mode === 'edit'
+  const showModalError = templateStatus?.type === 'error'
+
   function mediaIcon(type: MediaType) {
     switch (type) {
       case 'image':
@@ -86,7 +354,7 @@ function MessageManager() {
     }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const mime = file.type || 'application/octet-stream'
@@ -125,7 +393,7 @@ function MessageManager() {
     return unique
   }
 
-  async function handleCsvTexto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCsvTexto(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     try {
@@ -139,7 +407,7 @@ function MessageManager() {
     }
   }
 
-  async function handleCsvMedia(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleCsvMedia(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     try {
@@ -252,6 +520,211 @@ function MessageManager() {
     setResultText('')
   }
 
+  function resetTemplateForm() {
+    setTemplateForm({
+      open: false,
+      mode: 'create',
+      templateId: null,
+      name: '',
+      description: '',
+      type: 'texto',
+    })
+  }
+
+  function openNewTemplateForm(type: TabKey) {
+    setTemplateForm({
+      open: true,
+      mode: 'create',
+      templateId: null,
+      name: buildDefaultTemplateName(type),
+      description: '',
+      type,
+    })
+    setTemplateStatus(null)
+    setSelectedTemplateId(null)
+    setActiveTab(type)
+  }
+
+  function closeTemplateForm() {
+    resetTemplateForm()
+  }
+
+  function applyTemplate(template: MessageTemplate, options: { silent?: boolean } = {}) {
+    setActiveTab(template.type)
+    setSelectedTemplateId(template.id)
+    if (template.type === 'texto') {
+      setNumerosTexto(template.payload.numeros)
+      setMensaje(template.payload.mensaje)
+      setIsManualTexto(template.payload.isManual)
+      setCsvCountTexto(template.payload.isManual ? 0 : template.payload.numeros.split(',').filter(Boolean).length)
+    } else {
+      setNumerosMedia(template.payload.numeros)
+      setCaption(template.payload.caption)
+      setFileName(template.payload.fileName)
+      setMediaBase64(template.payload.mediaBase64)
+      setMediaType(template.payload.mediaType)
+      setMimeType(template.payload.mimeType)
+      setIsManualMedia(template.payload.isManual)
+      setCsvCountMedia(template.payload.isManual ? 0 : template.payload.numeros.split(',').filter(Boolean).length)
+    }
+    if (!options.silent) {
+      setTemplateStatus({ type: 'success', message: `Plantilla "${template.name}" aplicada.` })
+    }
+  }
+
+  function handleApplyTemplate(template: MessageTemplate) {
+    applyTemplate(template)
+  }
+
+  function handleEditTemplate(template: MessageTemplate) {
+    applyTemplate(template, { silent: true })
+    setTemplateForm({
+      open: true,
+      mode: 'edit',
+      templateId: template.id,
+      name: template.name,
+      description: template.description ?? '',
+      type: template.type,
+    })
+    setTemplateStatus(null)
+  }
+
+  function handleDeleteTemplate(template: MessageTemplate) {
+    let confirmed = true
+    if (typeof window !== 'undefined') {
+      confirmed = window.confirm(`¿Eliminar la plantilla "${template.name}"?`)
+    }
+    if (!confirmed) return
+    updateTemplates((prev) => prev.filter((tpl) => tpl.id !== template.id))
+    if (selectedTemplateId === template.id) {
+      setSelectedTemplateId(null)
+    }
+    if (templateForm.open && templateForm.templateId === template.id) {
+      resetTemplateForm()
+    }
+    setTemplateStatus({ type: 'success', message: 'Plantilla eliminada correctamente.' })
+  }
+
+  function handleTemplateFormSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmedName = templateForm.name.trim()
+    if (!trimmedName) {
+      setTemplateStatus({ type: 'error', message: 'Asigne un nombre a la plantilla.' })
+      return
+    }
+    const numbersRaw = templateForm.type === 'texto' ? numerosTexto : numerosMedia
+    const sanitizedNumbers = numbersRaw
+      .split(',')
+      .map((n) => n.trim())
+      .filter(Boolean)
+      .join(',')
+    if (!sanitizedNumbers) {
+      setTemplateStatus({ type: 'error', message: 'Capture al menos un número válido antes de guardar la plantilla.' })
+      return
+    }
+
+    const duplicate = templates.some((tpl) => tpl.id !== templateForm.templateId
+      && tpl.type === templateForm.type
+      && (tpl.userId == null || tpl.userId === currentUserId)
+      && tpl.name.trim().toLowerCase() === trimmedName.toLowerCase())
+    if (duplicate) {
+      setTemplateStatus({ type: 'error', message: 'Ya existe una plantilla con ese nombre para este tipo de envío.' })
+      return
+    }
+
+    const nowIso = new Date().toISOString()
+    const description = templateForm.description.trim()
+
+    if (templateForm.type === 'texto') {
+      const messageBody = mensaje.trim()
+      if (!messageBody) {
+        setTemplateStatus({ type: 'error', message: 'El mensaje de texto no puede estar vacío.' })
+        return
+      }
+      const payload: TextTemplate['payload'] = {
+        numeros: sanitizedNumbers,
+        mensaje: messageBody,
+        isManual: isManualTexto,
+      }
+      if (templateForm.mode === 'edit' && templateForm.templateId) {
+        updateTemplates((prev) => prev.map((tpl) => {
+          if (tpl.id !== templateForm.templateId) return tpl
+          if (tpl.type !== 'texto') return tpl
+          return { ...tpl, name: trimmedName, description, updatedAt: nowIso, payload }
+        }))
+        setTemplateStatus({ type: 'success', message: 'Plantilla actualizada correctamente.' })
+        setSelectedTemplateId(templateForm.templateId)
+      } else {
+        const newTemplate: TextTemplate = {
+          id: generateTemplateId(),
+          userId: currentUserId,
+          name: trimmedName,
+          description,
+          type: 'texto',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          payload,
+        }
+        updateTemplates((prev) => [...prev, newTemplate])
+        setTemplateStatus({ type: 'success', message: 'Plantilla guardada correctamente.' })
+        setSelectedTemplateId(newTemplate.id)
+      }
+      setTemplateFilter('texto')
+      resetTemplateForm()
+      return
+    }
+
+    if (!fileName.trim()) {
+      setTemplateStatus({ type: 'error', message: 'Asigne un nombre al archivo antes de guardar la plantilla multimedia.' })
+      return
+    }
+    if (!mediaBase64.trim()) {
+      setTemplateStatus({ type: 'error', message: 'Seleccione un archivo para adjuntar a la plantilla multimedia.' })
+      return
+    }
+    const currentSizeKb = templateMediaSizeKb
+    if (currentSizeKb > 3800) {
+      setTemplateStatus({ type: 'error', message: `El archivo adjunto es muy pesado (${currentSizeKb} KB). Use un archivo menor a 4 MB o gestione la plantilla desde el backend.` })
+      return
+    }
+
+    const payload: MediaTemplate['payload'] = {
+      numeros: sanitizedNumbers,
+      caption: caption.trim(),
+      fileName: fileName.trim(),
+      mediaBase64,
+      mediaType,
+      mimeType: mimeType || 'application/octet-stream',
+      isManual: isManualMedia,
+    }
+
+    if (templateForm.mode === 'edit' && templateForm.templateId) {
+      updateTemplates((prev) => prev.map((tpl) => {
+        if (tpl.id !== templateForm.templateId) return tpl
+        if (tpl.type !== 'media') return tpl
+        return { ...tpl, name: trimmedName, description, updatedAt: nowIso, payload }
+      }))
+      setTemplateStatus({ type: 'success', message: 'Plantilla multimedia actualizada correctamente.' })
+      setSelectedTemplateId(templateForm.templateId)
+    } else {
+      const newTemplate: MediaTemplate = {
+        id: generateTemplateId(),
+        userId: currentUserId,
+        name: trimmedName,
+        description,
+        type: 'media',
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        payload,
+      }
+      updateTemplates((prev) => [...prev, newTemplate])
+      setTemplateStatus({ type: 'success', message: 'Plantilla multimedia guardada correctamente.' })
+      setSelectedTemplateId(newTemplate.id)
+    }
+    setTemplateFilter('media')
+    resetTemplateForm()
+  }
+
   return (
     <div className="mensajes mensajes-layout">
       <aside className="mensajes-sidebar">
@@ -309,6 +782,89 @@ function MessageManager() {
               <strong>{numerosMedia ? numerosMedia.split(',').filter(Boolean).length : 0}</strong>
             </li>
           </ul>
+        </div>
+
+        <div className="mensajes-sidebar__card mensajes-sidebar__card--templates">
+          <div className="mensajes-sidebar__card-header">
+            <h3>Plantillas guardadas</h3>
+            <span className="mensajes-status templates"><i className="fas fa-database"></i> {templateCounts.all}</span>
+          </div>
+
+          {templateStatus && (
+            <div className={`template-alert ${templateStatus.type === 'success' ? 'is-success' : 'is-error'}`} role="status">
+              <i className={`fas ${templateStatus.type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation'}`}></i>
+              <span>{templateStatus.message}</span>
+            </div>
+          )}
+
+          <div className="templates-filter" role="radiogroup" aria-label="Filtro de plantillas">
+            <button
+              type="button"
+              className={`template-filter-btn ${templateFilter === 'all' ? 'is-active' : ''}`}
+              onClick={() => setTemplateFilter('all')}
+            >
+              Todas <span>{templateCounts.all}</span>
+            </button>
+            <button
+              type="button"
+              className={`template-filter-btn ${templateFilter === 'texto' ? 'is-active' : ''}`}
+              onClick={() => setTemplateFilter('texto')}
+            >
+              Texto <span>{templateCounts.texto}</span>
+            </button>
+            <button
+              type="button"
+              className={`template-filter-btn ${templateFilter === 'media' ? 'is-active' : ''}`}
+              onClick={() => setTemplateFilter('media')}
+            >
+              Multimedia <span>{templateCounts.media}</span>
+            </button>
+          </div>
+
+          <div className="templates-list" role="list">
+            {visibleTemplates.length === 0 && (
+              <p className="templates-empty">
+                <i className="fas fa-clipboard"></i> Aún no hay plantillas guardadas en este filtro.
+              </p>
+            )}
+            {visibleTemplates.map((template) => (
+              <article
+                key={template.id}
+                role="listitem"
+                className={`template-card ${selectedTemplateId === template.id ? 'is-selected' : ''}`}
+              >
+                <button type="button" className="template-card__body" onClick={() => handleApplyTemplate(template)}>
+                  <div className="template-card__icon">
+                    <i className={`fas ${template.type === 'texto' ? 'fa-font' : 'fa-photo-film'}`}></i>
+                  </div>
+                  <div className="template-card__info">
+                    <strong>{template.name}</strong>
+                    <span className="template-card__meta">
+                      {template.type === 'texto' ? 'Mensaje de texto' : 'Mensaje multimedia'} · {countNumbersFromString(template.payload.numeros)} destinatarios
+                    </span>
+                    <span className="template-card__date">Actualizada {formatTimestamp(template.updatedAt)}</span>
+                  </div>
+                </button>
+                <div className="template-card__actions">
+                  <button type="button" className="template-card__action" onClick={() => handleEditTemplate(template)}>
+                    <i className="fas fa-pen"></i>
+                  </button>
+                  <button type="button" className="template-card__action is-danger" onClick={() => handleDeleteTemplate(template)}>
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <div className="templates-footer">
+            <button type="button" className="mensajes-link" onClick={() => openNewTemplateForm('texto')}>
+              <i className="fas fa-plus-circle"></i> Nueva plantilla de texto
+            </button>
+            <button type="button" className="mensajes-link" onClick={() => openNewTemplateForm('media')}>
+              <i className="fas fa-plus-circle"></i> Nueva plantilla multimedia
+            </button>
+          </div>
         </div>
 
         <div className="mensajes-sidebar__footer">
@@ -415,6 +971,9 @@ function MessageManager() {
               </div>
 
               <div className="actions">
+                <button type="button" className="btn btn-outline" onClick={() => openNewTemplateForm('texto')}>
+                  <i className="fas fa-floppy-disk"></i> Guardar como plantilla
+                </button>
                 <button id="send-btn" className="btn" onClick={enviarMensajes}>
                   <i className="fas fa-paper-plane"></i> Enviar mensajes
                 </button>
@@ -508,6 +1067,9 @@ function MessageManager() {
               </div>
 
               <div className="actions">
+                <button type="button" className="btn btn-outline" onClick={() => openNewTemplateForm('media')}>
+                  <i className="fas fa-floppy-disk"></i> Guardar como plantilla
+                </button>
                 <button id="send-media-btn" className="btn btn-secondary" onClick={enviarMedios}>
             <i className="fas fa-photo-film"></i> Enviar medios
                 </button>
@@ -540,6 +1102,101 @@ function MessageManager() {
           </section>
         </div>
       </main>
+
+      {templateForm.open && (
+        <div className="template-modal" role="dialog" aria-modal="true" aria-labelledby="template-modal-title">
+          <div className="template-modal__backdrop" onClick={closeTemplateForm}></div>
+          <div className="template-modal__container" onClick={(event) => event.stopPropagation()}>
+            <form className="template-modal__content" onSubmit={handleTemplateFormSubmit}>
+              <header className="template-modal__header">
+                <div>
+                  <h2 id="template-modal-title">{isEditingTemplate ? 'Actualizar plantilla' : 'Guardar configuración como plantilla'}</h2>
+                  <p>Configure un nombre y descripción para reutilizar esta configuración de {templateForm.type === 'texto' ? 'mensaje de texto' : 'mensaje multimedia'} en futuras campañas.</p>
+                </div>
+                <button type="button" className="template-modal__close" onClick={closeTemplateForm} aria-label="Cerrar">
+                  <i className="fas fa-xmark"></i>
+                </button>
+              </header>
+
+              {showModalError && templateStatus && (
+                <div className="template-alert is-error" role="alert">
+                  <i className="fas fa-triangle-exclamation"></i>
+                  <span>{templateStatus.message}</span>
+                </div>
+              )}
+
+              <div className="template-modal__body">
+                <div className="template-modal__field">
+                  <label htmlFor="template-name"><i className="fas fa-tag"></i> Nombre de la plantilla</label>
+                  <input
+                    id="template-name"
+                    className="input-field"
+                    value={templateForm.name}
+                    onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))}
+                    placeholder={buildDefaultTemplateName(templateForm.type)}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="template-modal__field">
+                  <label htmlFor="template-description"><i className="fas fa-comment-dots"></i> Descripción (opcional)</label>
+                  <textarea
+                    id="template-description"
+                    className="textarea-field"
+                    value={templateForm.description}
+                    onChange={(event) => setTemplateForm((prev) => ({ ...prev, description: event.target.value }))}
+                    placeholder="Añada contexto para su equipo"
+                    rows={3}
+                  />
+                </div>
+
+                <div className="template-summary">
+                  <div className="template-summary__card">
+                    <span className="template-summary__label">Tipo</span>
+                    <strong className="template-summary__value">{templateForm.type === 'texto' ? 'Mensaje de texto' : 'Mensaje multimedia'}</strong>
+                  </div>
+                  <div className="template-summary__card">
+                    <span className="template-summary__label">Destinatarios</span>
+                    <strong className="template-summary__value">{currentTemplateNumbersCount}</strong>
+                    {templateNumbersSample.list.length > 0 && (
+                      <small className="template-summary__hint">
+                        {templateNumbersSample.list.join(', ')}{templateNumbersSample.hasMore ? '…' : ''}
+                      </small>
+                    )}
+                  </div>
+                  {templateForm.type === 'media' ? (
+                    <div className="template-summary__card">
+                      <span className="template-summary__label">Archivo adjunto</span>
+                      <strong className="template-summary__value">{fileName || 'Sin archivo'}</strong>
+                      <small className="template-summary__hint">{mimeType || 'application/octet-stream'} · {templateMediaSizeKb} KB</small>
+                    </div>
+                  ) : (
+                    <div className="template-summary__card">
+                      <span className="template-summary__label">Mensaje</span>
+                      <small className="template-summary__hint template-summary__hint--multiline">{mensaje || 'Sin contenido'}</small>
+                    </div>
+                  )}
+                </div>
+
+                {templateForm.type === 'media' && templateMediaSizeKb > 3600 && (
+                  <p className="template-summary__warning">
+                    <i className="fas fa-exclamation-circle"></i> Este archivo está cerca del límite recomendado (4 MB). Considere optimizarlo para garantizar envíos exitosos.
+                  </p>
+                )}
+              </div>
+
+              <footer className="template-modal__footer">
+                <button type="button" className="btn btn-outline" onClick={closeTemplateForm}>
+                  <i className="fas fa-ban"></i> Cancelar
+                </button>
+                <button type="submit" className="btn">
+                  <i className="fas fa-floppy-disk"></i> {isEditingTemplate ? 'Actualizar plantilla' : 'Guardar plantilla'}
+                </button>
+              </footer>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
