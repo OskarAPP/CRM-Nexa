@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './mensajes.css'
 
 type TabKey = 'texto' | 'media'
@@ -43,6 +43,20 @@ function MessageManager() {
   // Resultados
   const [resultText, setResultText] = useState('// Los resultados de sus envíos aparecerán aquí')
   const [showDetails, setShowDetails] = useState(false)
+
+  const resolveUserId = useCallback((): number | null => {
+    if (typeof window === 'undefined') return null
+    try {
+      const raw = window.localStorage.getItem('user_id')
+      if (!raw) return null
+      const trimmed = raw.trim()
+      if (!trimmed) return null
+      const parsed = Number(trimmed)
+      return Number.isFinite(parsed) ? parsed : null
+    } catch {
+      return null
+    }
+  }, [])
 
   const autoTypeNode = useMemo(() => {
     if (!mimeType) {
@@ -161,10 +175,8 @@ function MessageManager() {
       setResultText('Error: El mensaje no puede estar vacío')
       return
     }
-    const rawUserId = typeof window !== 'undefined' ? window.localStorage.getItem('user_id') : null
-    const sanitizedUserId = rawUserId ? rawUserId.trim() : null
-    const userId = sanitizedUserId ? Number(sanitizedUserId) : null
-    if (!sanitizedUserId || Number.isNaN(userId)) {
+    const userId = resolveUserId()
+    if (userId == null) {
       setResultText('Error: No se encontró un user_id válido en la sesión. Inicie sesión nuevamente.')
       return
     }
@@ -202,12 +214,18 @@ function MessageManager() {
       setResultText('Error: Debe proporcionar un nombre de archivo')
       return
     }
+    const userId = resolveUserId()
+    if (userId == null) {
+      setResultText('Error: No se encontró un user_id válido en la sesión. Inicie sesión nuevamente.')
+      return
+    }
     setResultText('Enviando medios...')
     try {
       const resp = await fetch(`${API_BASE}/api/send-media`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          user_id: userId,
           numeros,
           mediatype: mediaType,
           mimetype: mimeType || 'application/octet-stream',
