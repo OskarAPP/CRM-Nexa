@@ -554,6 +554,116 @@ body {
   padding: 0 28px 28px;
 }
 
+.templates-preview {
+  margin: 12px 28px 0;
+  padding: 28px 0 6px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.templates-preview__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.templates-preview__header h3 {
+  margin: 0;
+  font-size: 19px;
+}
+
+.templates-preview__header span {
+  color: var(--inicio-muted);
+  font-size: 14px;
+}
+
+.templates-preview__empty {
+  margin: 0;
+  color: var(--inicio-muted);
+  font-size: 14px;
+}
+
+.templates-preview__grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.template-chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: var(--inicio-radius-sm);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(10, 18, 36, 0.72);
+  box-shadow: 0 20px 40px rgba(8, 12, 24, 0.32);
+}
+
+.template-chip__icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  font-size: 18px;
+  background: rgba(56, 189, 248, 0.15);
+  color: var(--inicio-highlight);
+}
+
+.template-chip--media .template-chip__icon {
+  background: rgba(236, 72, 153, 0.18);
+  color: #f472b6;
+}
+
+.template-chip__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.template-chip__body strong {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.template-chip__body span {
+  font-size: 13px;
+  color: var(--inicio-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.template-chip__date {
+  font-size: 12px;
+  color: rgba(148, 163, 184, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.templates-preview__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.templates-preview__footer .ghost-btn {
+  padding: 9px 14px;
+}
+
+.templates-preview__more {
+  font-size: 13px;
+  color: var(--inicio-muted);
+}
+
 .campaign-item {
   display: grid;
   grid-template-columns: 56px 1fr auto;

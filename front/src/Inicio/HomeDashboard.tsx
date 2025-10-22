@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './home.css'
+import {
+  TEMPLATE_STORAGE_KEY,
+  readTemplatesFromStorage,
+  countNumbersFromString,
+  type MessageTemplate,
+} from '../mensajes/templateHistory'
 
 type SessionSnapshot = {
   name: string | null
@@ -70,10 +76,15 @@ export default function HomeDashboard() {
   const [session, setSession] = useState<SessionSnapshot>(() => readSessionFromStorage())
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<MessageTemplate[]>(() => readTemplatesFromStorage())
   const navigate = useNavigate()
 
   const refreshSession = useCallback(() => {
     setSession(readSessionFromStorage())
+  }, [])
+
+  const refreshTemplates = useCallback(() => {
+    setTemplates(readTemplatesFromStorage())
   }, [])
 
   useEffect(() => {
@@ -91,16 +102,25 @@ export default function HomeDashboard() {
     if (typeof window === 'undefined') return
 
     refreshSession()
+    refreshTemplates()
 
     const handleStorage = (event: StorageEvent) => {
-      if (!event.key || STORAGE_KEYS_SET.has(event.key)) {
+      if (!event.key) {
         refreshSession()
+        refreshTemplates()
+        return
+      }
+      if (STORAGE_KEYS_SET.has(event.key)) {
+        refreshSession()
+      }
+      if (event.key === TEMPLATE_STORAGE_KEY) {
+        refreshTemplates()
       }
     }
 
     window.addEventListener('storage', handleStorage)
     return () => window.removeEventListener('storage', handleStorage)
-  }, [refreshSession])
+  }, [refreshSession, refreshTemplates])
 
   const displayName = useMemo(() => {
     if (!session.name) return DEFAULT_NAME
@@ -127,6 +147,24 @@ export default function HomeDashboard() {
         : 'Accede con tus credenciales para personalizar este panel con tus datos e integraciones.',
     [session.name]
   )
+
+  const templateDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat('es-MX', { month: 'short', day: 'numeric' }),
+    []
+  )
+
+  const formatTemplateDate = useCallback(
+    (value: string) => {
+      try {
+        return templateDateFormatter.format(new Date(value))
+      } catch {
+        return 'Sin fecha'
+      }
+    },
+    [templateDateFormatter]
+  )
+
+  const templatePreview = useMemo(() => templates.slice(0, 4), [templates])
 
   const quickLinks = [
     {
@@ -381,6 +419,53 @@ export default function HomeDashboard() {
                   <span className="status-chip">{card.status}</span>
                 </div>
               ))}
+            </div>
+
+            <div className="templates-preview">
+              <div className="templates-preview__header">
+                <h3>Plantillas guardadas</h3>
+                <span>{templates.length} en total</span>
+              </div>
+
+              {templates.length === 0 ? (
+                <p className="templates-preview__empty">
+                  Aún no guardas configuraciones desde el módulo de mensajes.
+                </p>
+              ) : (
+                <>
+                  <div className="templates-preview__grid">
+                    {templatePreview.map((tpl) => (
+                      <article key={tpl.id} className={`template-chip template-chip--${tpl.type}`}>
+                        <div className="template-chip__icon">
+                          <i className={`fas ${tpl.type === 'texto' ? 'fa-font' : 'fa-photo-film'}`}></i>
+                        </div>
+                        <div className="template-chip__body">
+                          <strong>{tpl.name}</strong>
+                          <span>
+                            {tpl.type === 'texto' ? 'Mensaje de texto' : 'Mensaje multimedia'} ·{' '}
+                            {countNumbersFromString(tpl.payload.numeros)} destinatarios
+                          </span>
+                        </div>
+                        <span className="template-chip__date">{formatTemplateDate(tpl.updatedAt)}</span>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="templates-preview__footer">
+                    <button
+                      type="button"
+                      className="ghost-btn"
+                      onClick={() => navigate('/mensajes')}
+                    >
+                      Administrar plantillas
+                    </button>
+                    {templates.length > templatePreview.length && (
+                      <span className="templates-preview__more">
+                        +{templates.length - templatePreview.length} adicionales guardadas
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </article>
 

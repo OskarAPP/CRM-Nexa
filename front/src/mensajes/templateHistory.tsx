@@ -53,7 +53,7 @@ export interface TemplateStatus {
   message: string
 }
 
-const TEMPLATE_STORAGE_KEY = 'crm-nexa:mensajes:templates:v1'
+export const TEMPLATE_STORAGE_KEY = 'crm-nexa:mensajes:templates:v1'
 const TEMPLATE_STATUS_TIMEOUT = 4000
 const MAX_MEDIA_TEMPLATE_SIZE_KB = 3800
 const DEFAULT_HISTORY_PLACEHOLDER = '// Los resultados de sus envíos aparecerán aquí'
@@ -151,6 +151,23 @@ export function estimateBase64SizeKb(base64: string): number {
   if (!base64) return 0
   const bytes = Math.ceil((base64.length * 3) / 4)
   return Math.ceil(bytes / 1024)
+}
+
+export function readTemplatesFromStorage(): MessageTemplate[] {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return []
+  }
+  try {
+    const raw = window.localStorage.getItem(TEMPLATE_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .map((value) => normalizeTemplate(value))
+      .filter((tpl): tpl is MessageTemplate => tpl !== null)
+  } catch {
+    return []
+  }
 }
 
 export interface TemplateManagerTextState {
