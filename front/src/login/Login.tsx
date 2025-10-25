@@ -182,6 +182,11 @@ function persistAuthSnapshot(payload: LoginSuccessPayload) {
     entries.push(['nombres', nombresValue.trim()])
   }
 
+  const nombreValue = typeof user?.nombre === 'string' ? user.nombre : undefined
+  if (nombreValue && nombreValue.trim().length > 0) {
+    entries.push(['nombre', nombreValue.trim()])
+  }
+
   const idCandidate = payload.Id ?? payload.id ?? user?.id
   if (idCandidate !== undefined && idCandidate !== null) {
     entries.push(['Id', String(idCandidate)])
@@ -400,7 +405,7 @@ export default function Login() {
   }, [stage, lastLoginPayload, navigate])
 
   async function requestLoginPayload(): Promise<LoginSuccessPayload> {
-    const res = await fetch(`${API_BASE}/api/login`, {
+  const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

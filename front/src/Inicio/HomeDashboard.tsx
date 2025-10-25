@@ -2,9 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './home.css'
 import {
-  TEMPLATE_STORAGE_KEY,
-  readTemplatesFromStorage,
+  TEMPLATE_CHANGED_EVENT,
+  fetchTemplatesFromApi,
   countNumbersFromString,
+  ApiError,
   type MessageTemplate,
 } from '../mensajes/templateHistory'
 
@@ -72,19 +73,33 @@ const readSessionFromStorage = (): SessionSnapshot => {
   }
 }
 
+const sortTemplatesByUpdatedAt = (list: MessageTemplate[]): MessageTemplate[] =>
+  list
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+
 export default function HomeDashboard() {
   const [session, setSession] = useState<SessionSnapshot>(() => readSessionFromStorage())
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [logoutError, setLogoutError] = useState<string | null>(null)
-  const [templates, setTemplates] = useState<MessageTemplate[]>(() => readTemplatesFromStorage())
+  const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const navigate = useNavigate()
 
   const refreshSession = useCallback(() => {
     setSession(readSessionFromStorage())
   }, [])
 
-  const refreshTemplates = useCallback(() => {
-    setTemplates(readTemplatesFromStorage())
+  const refreshTemplates = useCallback(async () => {
+    try {
+      const response = await fetchTemplatesFromApi()
+      setTemplates(sortTemplatesByUpdatedAt(response))
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setTemplates([])
+        return
+      }
+      console.warn('No se pudieron cargar las plantillas desde la API', error)
+    }
   }, [])
 
   useEffect(() => {
@@ -102,24 +117,30 @@ export default function HomeDashboard() {
     if (typeof window === 'undefined') return
 
     refreshSession()
-    refreshTemplates()
+    void refreshTemplates()
 
     const handleStorage = (event: StorageEvent) => {
       if (!event.key) {
         refreshSession()
-        refreshTemplates()
+        void refreshTemplates()
         return
       }
       if (STORAGE_KEYS_SET.has(event.key)) {
         refreshSession()
       }
-      if (event.key === TEMPLATE_STORAGE_KEY) {
-        refreshTemplates()
-      }
+    }
+
+    const templateListener: EventListener = () => {
+      void refreshTemplates()
     }
 
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    window.addEventListener(TEMPLATE_CHANGED_EVENT, templateListener)
+
+    return () => {
+      window.removeEventListener('storage', handleStorage)
+      window.removeEventListener(TEMPLATE_CHANGED_EVENT, templateListener)
+    }
   }, [refreshSession, refreshTemplates])
 
   const displayName = useMemo(() => {

@@ -431,7 +431,7 @@ function MessageManager() {
                   <button type="button" className="template-card__action" onClick={() => handleEditTemplate(template)}>
                     <i className="fas fa-pen"></i>
                   </button>
-                  <button type="button" className="template-card__action is-danger" onClick={() => handleDeleteTemplate(template)}>
+                  <button type="button" className="template-card__action is-danger" onClick={() => void handleDeleteTemplate(template)}>
                     <i className="fas fa-trash"></i>
                   </button>
                 </div>

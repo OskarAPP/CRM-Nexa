@@ -1,43 +1,37 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react'
+import type {
+  MediaTemplate,
+  MediaType,
+  MessageTemplate,
+  TabKey,
+  TemplateFormMode,
+  TextTemplate,
+} from './templateTypes'
+export type {
+  MediaTemplate,
+  MediaType,
+  MessageTemplate,
+  TabKey,
+  TemplateFormMode,
+  TextTemplate,
+} from './templateTypes'
 
-export type TabKey = 'texto' | 'media'
-export type MediaType = 'image' | 'video' | 'audio' | 'document'
-export type TemplateFormMode = 'create' | 'edit'
-
-interface TemplateBase {
+type TemplateBaseShape = {
   id: string
   userId: number | null
   name: string
-  description?: string
+  description: string
   type: TabKey
   createdAt: string
   updatedAt: string
 }
 
-export interface TextTemplate extends TemplateBase {
-  type: 'texto'
-  payload: {
-    numeros: string
-    mensaje: string
-    isManual: boolean
-  }
+function sortTemplatesByUpdatedAt(list: MessageTemplate[]): MessageTemplate[] {
+  return list
+    .slice()
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
 }
-
-export interface MediaTemplate extends TemplateBase {
-  type: 'media'
-  payload: {
-    numeros: string
-    caption: string
-    fileName: string
-    mediaBase64: string
-    mediaType: MediaType
-    mimeType: string
-    isManual: boolean
-  }
-}
-
-export type MessageTemplate = TextTemplate | MediaTemplate
 
 export interface TemplateFormState {
   open: boolean
@@ -53,17 +47,12 @@ export interface TemplateStatus {
   message: string
 }
 
-export const TEMPLATE_STORAGE_KEY = 'crm-nexa:mensajes:templates:v1'
 const TEMPLATE_STATUS_TIMEOUT = 4000
-const MAX_MEDIA_TEMPLATE_SIZE_KB = 3800
+const MAX_MEDIA_TEMPLATE_SIZE_KB = 15360 // ~15 MB, considering base64 overhead
 const DEFAULT_HISTORY_PLACEHOLDER = '// Los resultados de sus envíos aparecerán aquí'
-
-export function generateTemplateId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID()
-  }
-  return `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-}
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+const API_TEMPLATES_PATH = '/api/plantillas'
+export const TEMPLATE_CHANGED_EVENT = 'crm-nexa:templates:changed'
 
 function isMessageTemplate(value: unknown): value is MessageTemplate {
   if (!value || typeof value !== 'object') return false
@@ -102,7 +91,7 @@ function isMessageTemplate(value: unknown): value is MessageTemplate {
 function normalizeTemplate(value: unknown): MessageTemplate | null {
   if (!isMessageTemplate(value)) return null
   const candidate = value as MessageTemplate
-  const base: TemplateBase = {
+  const base: TemplateBaseShape = {
     id: candidate.id,
     userId: typeof candidate.userId === 'number' ? candidate.userId : null,
     name: candidate.name,
@@ -153,21 +142,188 @@ export function estimateBase64SizeKb(base64: string): number {
   return Math.ceil(bytes / 1024)
 }
 
-export function readTemplatesFromStorage(): MessageTemplate[] {
+export class ApiError extends Error {
+  status: number
+  payload: unknown
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.payload = payload
+  }
+}
+
+export type TemplateChangedEventDetail = {
+  action: 'created' | 'updated' | 'deleted' | 'synced'
+  template?: MessageTemplate
+}
+
+function dispatchTemplateEvent(detail: TemplateChangedEventDetail) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent<TemplateChangedEventDetail>(TEMPLATE_CHANGED_EVENT, { detail }))
+}
+
+function readStoredToken(): string | null {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return []
+    return null
   }
   try {
-    const raw = window.localStorage.getItem(TEMPLATE_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .map((value) => normalizeTemplate(value))
-      .filter((tpl): tpl is MessageTemplate => tpl !== null)
+    const value = window.localStorage.getItem('token')
+    if (!value) return null
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
   } catch {
-    return []
+    return null
   }
+}
+
+async function apiRequest<T>(endpoint: string, init: RequestInit = {}, tokenOverride?: string): Promise<T> {
+  const token = tokenOverride ?? readStoredToken()
+  if (!token) {
+    throw new ApiError('No se encontró token de autenticación.', 401, null)
+  }
+
+  const headers = new Headers(init.headers ?? {})
+  headers.set('Accept', 'application/json')
+  if (!(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
+  headers.set('Authorization', `Bearer ${token}`)
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers })
+
+  const text = await response.text()
+  let payload: unknown = null
+  if (text) {
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      payload = text
+    }
+  }
+
+  if (!response.ok) {
+    const message = typeof payload === 'object' && payload && 'message' in (payload as Record<string, unknown>)
+      ? String((payload as Record<string, unknown>).message)
+      : `Error ${response.status}`
+    throw new ApiError(message, response.status, payload)
+  }
+
+  return payload as T
+}
+
+type TemplatePayloadRequest =
+  | {
+    type: 'texto'
+    payload: {
+      numeros: string
+      mensaje: string
+      isManual: boolean
+    }
+  }
+  | {
+    type: 'media'
+    payload: {
+      numeros: string
+      caption: string
+      fileName: string
+      mediaBase64: string
+      mediaType: MediaType
+      mimeType: string
+      isManual: boolean
+    }
+  }
+
+export type TemplateCreateRequest = TemplatePayloadRequest & {
+  name: string
+  description?: string
+}
+
+export type TemplateUpdateRequest = Partial<TemplatePayloadRequest> & {
+  name?: string
+  description?: string
+}
+
+type ApiListResponse = { data?: unknown }
+type ApiItemResponse = { data?: unknown }
+type ApiMessageResponse = { message?: string }
+
+function ensureMessageTemplates(value: unknown): MessageTemplate[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => normalizeTemplate(item))
+    .filter((tpl): tpl is MessageTemplate => tpl !== null)
+}
+
+function ensureMessageTemplate(value: unknown): MessageTemplate {
+  const normalized = normalizeTemplate(value)
+  if (!normalized) {
+    throw new ApiError('La respuesta del servidor no contiene una plantilla válida.', 500, value)
+  }
+  return normalized
+}
+
+export async function fetchTemplatesFromApi(tokenOverride?: string): Promise<MessageTemplate[]> {
+  const response = await apiRequest<ApiListResponse>(`${API_TEMPLATES_PATH}`, { method: 'GET' }, tokenOverride)
+  return ensureMessageTemplates(response.data)
+}
+
+export async function createTemplateInApi(
+  body: TemplateCreateRequest,
+  tokenOverride?: string,
+): Promise<MessageTemplate> {
+  const response = await apiRequest<ApiItemResponse & ApiMessageResponse>(
+    `${API_TEMPLATES_PATH}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        name: body.name,
+        description: body.description ?? '',
+        type: body.type,
+        payload: body.payload,
+      }),
+    },
+    tokenOverride,
+  )
+
+  const template = ensureMessageTemplate(response.data)
+  dispatchTemplateEvent({ action: 'created', template })
+  return template
+}
+
+export async function updateTemplateInApi(
+  id: string,
+  body: TemplateUpdateRequest,
+  tokenOverride?: string,
+): Promise<MessageTemplate> {
+  const response = await apiRequest<ApiItemResponse & ApiMessageResponse>(
+    `${API_TEMPLATES_PATH}/${encodeURIComponent(id)}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        name: body.name,
+        description: body.description ?? undefined,
+        type: body.type,
+        payload: body.payload,
+      }),
+    },
+    tokenOverride,
+  )
+
+  const template = ensureMessageTemplate(response.data)
+  dispatchTemplateEvent({ action: 'updated', template })
+  return template
+}
+
+export async function deleteTemplateInApi(id: string, tokenOverride?: string): Promise<void> {
+  await apiRequest<ApiMessageResponse>(
+    `${API_TEMPLATES_PATH}/${encodeURIComponent(id)}`,
+    { method: 'DELETE' },
+    tokenOverride,
+  )
+
+  dispatchTemplateEvent({ action: 'deleted' })
 }
 
 export interface TemplateManagerTextState {
@@ -218,8 +374,8 @@ export interface UseTemplateManagerResult {
   closeTemplateForm: () => void
   handleApplyTemplate: (template: MessageTemplate) => void
   handleEditTemplate: (template: MessageTemplate) => void
-  handleDeleteTemplate: (template: MessageTemplate) => void
-  handleTemplateFormSubmit: (event: FormEvent<HTMLFormElement>) => void
+  handleDeleteTemplate: (template: MessageTemplate) => Promise<void>
+  handleTemplateFormSubmit: (event: FormEvent<HTMLFormElement>) => Promise<void>
   buildDefaultTemplateName: (type: TabKey) => string
   formatTimestamp: (value: string) => string
   templateNumbersSample: { list: string[]; hasMore: boolean }
@@ -282,18 +438,25 @@ export function useTemplateManager({
   }, [getUserId])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const raw = window.localStorage.getItem(TEMPLATE_STORAGE_KEY)
-      if (!raw) return
-      const parsed = JSON.parse(raw)
-      if (!Array.isArray(parsed)) return
-      const normalized = parsed
-        .map((value) => normalizeTemplate(value))
-        .filter((tpl): tpl is MessageTemplate => tpl !== null)
-      setTemplates(normalized)
-    } catch {
-      // ignore malformed templates persisted earlier
+    let active = true
+    void (async () => {
+      try {
+        const current = await fetchTemplatesFromApi()
+        if (active) {
+          setTemplates(sortTemplatesByUpdatedAt(current))
+        }
+      } catch (error) {
+        if (!active) return
+        const message = error instanceof ApiError
+          ? error.status === 401
+            ? 'Tu sesión expiró. Inicia sesión nuevamente.'
+            : error.message
+          : 'No se pudieron cargar las plantillas.'
+        setTemplateStatus({ type: 'error', message })
+      }
+    })()
+    return () => {
+      active = false
     }
   }, [])
 
@@ -303,23 +466,6 @@ export function useTemplateManager({
     const timeout = window.setTimeout(() => setTemplateStatus(null), TEMPLATE_STATUS_TIMEOUT)
     return () => window.clearTimeout(timeout)
   }, [templateStatus])
-
-  const persistTemplates = useCallback((next: MessageTemplate[]) => {
-    if (typeof window === 'undefined') return
-    try {
-      window.localStorage.setItem(TEMPLATE_STORAGE_KEY, JSON.stringify(next))
-    } catch {
-      setTemplateStatus({ type: 'error', message: 'No se pudo actualizar el almacenamiento local de plantillas.' })
-    }
-  }, [setTemplateStatus])
-
-  const updateTemplates = useCallback((updater: (prev: MessageTemplate[]) => MessageTemplate[]) => {
-    setTemplates((prev) => {
-      const next = updater(prev)
-      persistTemplates(next)
-      return next
-    })
-  }, [persistTemplates])
 
   const templatesForCurrentUser = useMemo(() => {
     return templates.filter((tpl) => {
@@ -484,37 +630,48 @@ export function useTemplateManager({
     setTemplateStatus(null)
   }, [applyTemplate, setTemplateForm, setTemplateStatus])
 
-  const handleDeleteTemplate = useCallback((template: MessageTemplate) => {
+  const handleDeleteTemplate = useCallback(async (template: MessageTemplate) => {
     let confirmed = true
     if (typeof window !== 'undefined') {
       confirmed = window.confirm(`¿Eliminar la plantilla "${template.name}"?`)
     }
     if (!confirmed) return
-    updateTemplates((prev) => prev.filter((tpl) => tpl.id !== template.id))
-    if (selectedTemplateId === template.id) {
-      setSelectedTemplateId(null)
+
+    try {
+      await deleteTemplateInApi(template.id)
+      setTemplates((prev) => prev.filter((tpl) => tpl.id !== template.id))
+
+      if (selectedTemplateId === template.id) {
+        setSelectedTemplateId(null)
+      }
+      if (templateForm.open && templateForm.templateId === template.id) {
+        resetTemplateForm()
+      }
+
+      setTemplateStatus({ type: 'success', message: 'Plantilla eliminada correctamente.' })
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.message
+        : 'No se pudo eliminar la plantilla.'
+      setTemplateStatus({ type: 'error', message })
     }
-    if (templateForm.open && templateForm.templateId === template.id) {
-      resetTemplateForm()
-    }
-    setTemplateStatus({ type: 'success', message: 'Plantilla eliminada correctamente.' })
   }, [
     selectedTemplateId,
     templateForm.open,
     templateForm.templateId,
-    updateTemplates,
     resetTemplateForm,
     setSelectedTemplateId,
     setTemplateStatus,
   ])
 
-  const handleTemplateFormSubmit = useCallback((event: FormEvent<HTMLFormElement>) => {
+  const handleTemplateFormSubmit = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     const trimmedName = templateForm.name.trim()
     if (!trimmedName) {
       setTemplateStatus({ type: 'error', message: 'Asigne un nombre a la plantilla.' })
       return
     }
+
     const numbersRaw = templateForm.type === 'texto' ? numerosTexto : numerosMedia
     const sanitizedNumbers = numbersRaw
       .split(',')
@@ -535,99 +692,109 @@ export function useTemplateManager({
       return
     }
 
-    const nowIso = new Date().toISOString()
     const description = templateForm.description.trim()
+    const isEditing = templateForm.mode === 'edit' && !!templateForm.templateId
 
-    if (templateForm.type === 'texto') {
-      const messageBody = mensaje.trim()
-      if (!messageBody) {
-        setTemplateStatus({ type: 'error', message: 'El mensaje de texto no puede estar vacío.' })
-        return
-      }
-      const payload: TextTemplate['payload'] = {
-        numeros: sanitizedNumbers,
-        mensaje: messageBody,
-        isManual: isManualTexto,
-      }
-      if (templateForm.mode === 'edit' && templateForm.templateId) {
-        updateTemplates((prev) => prev.map((tpl) => {
-          if (tpl.id !== templateForm.templateId) return tpl
-          if (tpl.type !== 'texto') return tpl
-          return { ...tpl, name: trimmedName, description, updatedAt: nowIso, payload }
-        }))
-        setTemplateStatus({ type: 'success', message: 'Plantilla actualizada correctamente.' })
-        setSelectedTemplateId(templateForm.templateId)
-      } else {
-        const newTemplate: TextTemplate = {
-          id: generateTemplateId(),
-          userId: currentUserId,
-          name: trimmedName,
-          description,
-          type: 'texto',
-          createdAt: nowIso,
-          updatedAt: nowIso,
-          payload,
+    try {
+      let savedTemplate: MessageTemplate
+
+      if (templateForm.type === 'texto') {
+        const messageBody = mensaje.trim()
+        if (!messageBody) {
+          setTemplateStatus({ type: 'error', message: 'El mensaje de texto no puede estar vacío.' })
+          return
         }
-        updateTemplates((prev) => [...prev, newTemplate])
-        setTemplateStatus({ type: 'success', message: 'Plantilla guardada correctamente.' })
-        setSelectedTemplateId(newTemplate.id)
+
+        const payload: TextTemplate['payload'] = {
+          numeros: sanitizedNumbers,
+          mensaje: messageBody,
+          isManual: isManualTexto,
+        }
+
+        if (isEditing && templateForm.templateId) {
+          savedTemplate = await updateTemplateInApi(templateForm.templateId, {
+            name: trimmedName,
+            description,
+            type: 'texto',
+            payload,
+          })
+        } else {
+          savedTemplate = await createTemplateInApi({
+            name: trimmedName,
+            description,
+            type: 'texto',
+            payload,
+          })
+        }
+      } else {
+        if (!fileName.trim()) {
+          setTemplateStatus({ type: 'error', message: 'Asigne un nombre al archivo antes de guardar la plantilla multimedia.' })
+          return
+        }
+        if (!mediaBase64.trim()) {
+          setTemplateStatus({ type: 'error', message: 'Seleccione un archivo para adjuntar a la plantilla multimedia.' })
+          return
+        }
+        if (templateMediaSizeKb > MAX_MEDIA_TEMPLATE_SIZE_KB) {
+          setTemplateStatus({
+            type: 'error',
+      message: `El archivo adjunto es muy pesado (${templateMediaSizeKb} KB). Usa un archivo menor a 15 MB o gestiona la plantilla desde el backend.`,
+          })
+          return
+        }
+
+        const payload: MediaTemplate['payload'] = {
+          numeros: sanitizedNumbers,
+          caption: caption.trim(),
+          fileName: fileName.trim(),
+          mediaBase64,
+          mediaType,
+          mimeType: mimeType || 'application/octet-stream',
+          isManual: isManualMedia,
+        }
+
+        if (isEditing && templateForm.templateId) {
+          savedTemplate = await updateTemplateInApi(templateForm.templateId, {
+            name: trimmedName,
+            description,
+            type: 'media',
+            payload,
+          })
+        } else {
+          savedTemplate = await createTemplateInApi({
+            name: trimmedName,
+            description,
+            type: 'media',
+            payload,
+          })
+        }
       }
-      setTemplateFilter('texto')
+
+      setTemplates((prev) => sortTemplatesByUpdatedAt([
+        ...prev.filter((tpl) => tpl.id !== savedTemplate.id),
+        savedTemplate,
+      ]))
+
+      const successMessage = templateForm.type === 'texto'
+        ? isEditing
+          ? 'Plantilla actualizada correctamente.'
+          : 'Plantilla guardada correctamente.'
+        : isEditing
+          ? 'Plantilla multimedia actualizada correctamente.'
+          : 'Plantilla multimedia guardada correctamente.'
+
+      setTemplateStatus({ type: 'success', message: successMessage })
+      setSelectedTemplateId(savedTemplate.id)
+      setTemplateFilter(savedTemplate.type)
       resetTemplateForm()
-      return
+    } catch (error) {
+      const message = error instanceof ApiError
+        ? error.status === 401
+          ? 'Tu sesión expiró. Inicia sesión nuevamente.'
+          : error.message
+        : 'No se pudo guardar la plantilla.'
+      setTemplateStatus({ type: 'error', message })
     }
-
-    if (!fileName.trim()) {
-      setTemplateStatus({ type: 'error', message: 'Asigne un nombre al archivo antes de guardar la plantilla multimedia.' })
-      return
-    }
-    if (!mediaBase64.trim()) {
-      setTemplateStatus({ type: 'error', message: 'Seleccione un archivo para adjuntar a la plantilla multimedia.' })
-      return
-    }
-    if (templateMediaSizeKb > MAX_MEDIA_TEMPLATE_SIZE_KB) {
-      setTemplateStatus({
-        type: 'error',
-        message: `El archivo adjunto es muy pesado (${templateMediaSizeKb} KB). Use un archivo menor a 4 MB o gestione la plantilla desde el backend.`,
-      })
-      return
-    }
-
-    const payload: MediaTemplate['payload'] = {
-      numeros: sanitizedNumbers,
-      caption: caption.trim(),
-      fileName: fileName.trim(),
-      mediaBase64,
-      mediaType,
-      mimeType: mimeType || 'application/octet-stream',
-      isManual: isManualMedia,
-    }
-
-    if (templateForm.mode === 'edit' && templateForm.templateId) {
-      updateTemplates((prev) => prev.map((tpl) => {
-        if (tpl.id !== templateForm.templateId) return tpl
-        if (tpl.type !== 'media') return tpl
-        return { ...tpl, name: trimmedName, description, updatedAt: nowIso, payload }
-      }))
-      setTemplateStatus({ type: 'success', message: 'Plantilla multimedia actualizada correctamente.' })
-      setSelectedTemplateId(templateForm.templateId)
-    } else {
-      const newTemplate: MediaTemplate = {
-        id: generateTemplateId(),
-        userId: currentUserId,
-        name: trimmedName,
-        description,
-        type: 'media',
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        payload,
-      }
-      updateTemplates((prev) => [...prev, newTemplate])
-      setTemplateStatus({ type: 'success', message: 'Plantilla multimedia guardada correctamente.' })
-      setSelectedTemplateId(newTemplate.id)
-    }
-    setTemplateFilter('media')
-    resetTemplateForm()
   }, [
     templateForm,
     numerosTexto,
@@ -636,7 +803,6 @@ export function useTemplateManager({
     currentUserId,
     mensaje,
     isManualTexto,
-    updateTemplates,
     setTemplateFilter,
     resetTemplateForm,
     fileName,
