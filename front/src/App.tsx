@@ -8,7 +8,7 @@ import HomeDashboard from './Inicio/HomeDashboard'
 function App() {
   return (
     <Routes>
-  <Route path="/" element={<Navigate to="/home-dashboard" replace />} />
+    <Route path="/" element={<Navigate to="/login" replace />} />
       <Route path="/mensajes" element={<Mensajes />} />
       <Route path="/contactos" element={<Contacts />} />
       

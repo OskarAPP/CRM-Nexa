@@ -298,6 +298,12 @@ export default function HomeDashboard() {
       return
     }
 
+    const storedToken = session.token ?? (typeof window !== 'undefined' ? sanitizeValue(window.localStorage.getItem('token')) : null)
+    if (!storedToken) {
+      setLogoutError('No encontramos un token de autenticación para esta sesión. Inicia sesión nuevamente.')
+      return
+    }
+
     setIsLoggingOut(true)
     setLogoutError(null)
 
@@ -305,7 +311,11 @@ export default function HomeDashboard() {
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
       const response = await fetch(`${API_BASE}/api/logout`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          Authorization: `Bearer ${storedToken}`,
+        },
         body: JSON.stringify({ user_id: parsedUserId }),
       })
 
@@ -328,7 +338,7 @@ export default function HomeDashboard() {
     } finally {
       setIsLoggingOut(false)
     }
-  }, [isLoggingOut, navigate, session.userId])
+  }, [isLoggingOut, navigate, session.userId, session.token])
 
   return (
     <div className="inicio-layout">
