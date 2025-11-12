@@ -10,6 +10,37 @@ import {
   type TabKey,
 } from './templateHistory'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
+
+const getXsrfToken = (): string | null => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+const jsonAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  const token = getXsrfToken()
+  if (token) {
+    headers['X-XSRF-TOKEN'] = token
+  }
+
+  return headers
+}
+
+const ensureCsrfCookie = async (): Promise<void> => {
+  try {
+    await fetch(CSRF_ENDPOINT, { credentials: 'include' })
+  } catch (error) {
+    console.warn('No se pudo sincronizar la cookie CSRF', error)
+  }
+}
+
 export default function Mensajes() {
   return <MessageManager />
 }
@@ -224,7 +255,6 @@ function MessageManager() {
   }
 
   async function enviarMensajes() {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
     const numeros = numerosTexto.split(',').map((n) => n.trim()).filter(Boolean)
     if (!numeros.length) {
       setResultText('Error: Debe ingresar al menos un número válido')
@@ -241,10 +271,12 @@ function MessageManager() {
     }
     setResultText('Enviando mensajes...')
     try {
+      await ensureCsrfCookie()
       const resp = await fetch(`${API_BASE}/api/send-message`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, numeros, mensaje }),
+        headers: jsonAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({ numeros, mensaje }),
       })
       if (!resp.ok) {
         const text = await resp.text().catch(() => '')
@@ -259,7 +291,6 @@ function MessageManager() {
   }
 
   async function enviarMedios() {
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
     const numeros = numerosMedia.split(',').map((n) => n.trim()).filter(Boolean)
     if (!numeros.length) {
       setResultText('Error: Debe ingresar al menos un número válido')
@@ -280,11 +311,12 @@ function MessageManager() {
     }
     setResultText('Enviando medios...')
     try {
+      await ensureCsrfCookie()
       const resp = await fetch(`${API_BASE}/api/send-media`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify({
-          user_id: userId,
           numeros,
           mediatype: mediaType,
           mimetype: mimeType || 'application/octet-stream',

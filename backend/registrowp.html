@@ -154,6 +154,34 @@
 			? window.location.origin
 			: 'http://localhost:8000';
 		const endpoint = `${apiBase}/api/credenciales-whatsapp`;
+		const csrfEndpoint = `${apiBase}/sanctum/csrf-cookie`;
+
+		const getXsrfToken = () => {
+			const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/);
+			return match ? decodeURIComponent(match[1]) : null;
+		};
+
+		const buildJsonHeaders = () => {
+			const headers = {
+				'Content-Type': 'application/json',
+				'Accept': 'application/json'
+			};
+
+			const token = getXsrfToken();
+			if (token) {
+				headers['X-XSRF-TOKEN'] = token;
+			}
+
+			return headers;
+		};
+
+		const ensureCsrfCookie = async () => {
+			try {
+				await fetch(csrfEndpoint, { credentials: 'include' });
+			} catch (error) {
+				console.warn('No fue posible inicializar la cookie CSRF', error);
+			}
+		};
 
 		const toggleFormAvailability = (enabled) => {
 			form.instancia.disabled = !enabled;
@@ -225,12 +253,11 @@
 			consoleBox.textContent = 'Enviando solicitud...';
 
 			try {
+				await ensureCsrfCookie();
 				const response = await fetch(endpoint, {
 					method: 'POST',
-					headers: {
-						'Accept': 'application/json',
-						'Content-Type': 'application/json'
-					},
+					headers: buildJsonHeaders(),
+					credentials: 'include',
 					body: JSON.stringify(payload)
 				});
 

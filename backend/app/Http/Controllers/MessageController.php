@@ -11,15 +11,20 @@ class MessageController extends Controller
     public function sendMessage(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer',
             'numeros' => 'required|array',
             'mensaje' => 'required|string',
         ]);
 
-        $userId = $request->user_id;
+        $user = $request->user();
 
-        // ✅ Obtener credenciales dinámicamente
-        $credencial = CredencialWhatsapp::where('user_id', $userId)->first();
+        if (! $user) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Usuario no autenticado.'
+            ], 401);
+        }
+
+        $credencial = CredencialWhatsapp::where('user_id', $user->id)->first();
         if (!$credencial) {
             return response()->json([
                 'error' => true,
@@ -78,7 +83,6 @@ class MessageController extends Controller
     public function sendMedia(Request $request)
     {
         $request->validate([
-            'user_id' => 'required|integer',
             'numeros' => 'required|array',
             'mediatype' => 'required|string',   // image, video, document
             'mimetype' => 'required|string',    // ejemplo: image/png
@@ -89,10 +93,16 @@ class MessageController extends Controller
             'linkPreview' => 'nullable|boolean'
         ]);
 
-        $userId = $request->user_id;
+        $user = $request->user();
 
-        // ✅ Obtener credenciales dinámicamente
-        $credencial = CredencialWhatsapp::where('user_id', $userId)->first();
+        if (! $user) {
+            return response()->json([
+                'error' => true,
+                'message' => 'Usuario no autenticado.'
+            ], 401);
+        }
+
+        $credencial = CredencialWhatsapp::where('user_id', $user->id)->first();
         if (!$credencial) {
             return response()->json([
                 'error' => true,

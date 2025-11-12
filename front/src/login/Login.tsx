@@ -2,8 +2,24 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './login.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const SERVER_BASE = API_BASE.replace(/\/$/, '')
+
+async function ensureCsrfCookie(): Promise<void> {
+  try {
+    await fetch(`${API_BASE}/sanctum/csrf-cookie`, {
+      credentials: 'include',
+    })
+  } catch (error) {
+    console.error('No se pudo obtener la cookie CSRF', error)
+  }
+}
+
+function getXsrfToken(): string | null {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
 
 type LoginStage = 'form' | 'success' | 'qr'
 
@@ -198,10 +214,6 @@ function persistAuthSnapshot(payload: LoginSuccessPayload) {
     entries.push(['user_id', String(userIdCandidate)])
   }
 
-  if (payload.token !== undefined && payload.token !== null) {
-    entries.push(['token', String(payload.token)])
-  }
-
   const instanceValue = extractInstanceIdentifier(payload)
   if (instanceValue) {
     entries.push(['instance', instanceValue])
@@ -341,6 +353,7 @@ export default function Login() {
             headers: {
               Accept: 'application/json',
             },
+            credentials: 'include',
           },
         )
 
@@ -405,12 +418,22 @@ export default function Login() {
   }, [stage, lastLoginPayload, navigate])
 
   async function requestLoginPayload(): Promise<LoginSuccessPayload> {
+  await ensureCsrfCookie()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  const xsrfToken = getXsrfToken()
+  if (xsrfToken) {
+    headers['X-XSRF-TOKEN'] = xsrfToken
+  }
+
   const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
+      headers,
+      credentials: 'include',
       body: JSON.stringify({ email, password }),
     })
 

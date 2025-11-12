@@ -9,11 +9,13 @@ import {
   type MessageTemplate,
 } from '../mensajes/templateHistory'
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
+
 type SessionSnapshot = {
   name: string | null
   id: string | null
   userId: string | null
-  token: string | null
 }
 
 const DEFAULT_NAME = 'Nexa'
@@ -21,26 +23,53 @@ const DEFAULT_SESSION: SessionSnapshot = {
   name: null,
   id: null,
   userId: null,
-  token: null,
 }
 
 const STORAGE_FIELD_KEYS = {
   name: ['nombres', 'nombre'],
   id: ['Id', 'id'],
   userId: ['user_id'],
-  token: ['token'],
 } as const
 
-const STORAGE_KEYS_SET = new Set<string>(
-  Object.values(STORAGE_FIELD_KEYS)
-    .flat()
-    .map((key) => key)
-)
+const LEGACY_STORAGE_KEYS = ['token', 'lastRegisteredUserId', 'lastRegisteredUser', 'lastRegisteredUserName']
+
+const STORAGE_KEYS_SET = new Set<string>([
+  ...Object.values(STORAGE_FIELD_KEYS).flat(),
+  ...LEGACY_STORAGE_KEYS,
+])
 
 const sanitizeValue = (value: string | null) => {
   if (!value) return null
   const clean = value.trim()
   return clean.length > 0 ? clean : null
+}
+
+const getXsrfToken = (): string | null => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+const jsonAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  const token = getXsrfToken()
+  if (token) {
+    headers['X-XSRF-TOKEN'] = token
+  }
+
+  return headers
+}
+
+const ensureCsrfCookie = async (): Promise<void> => {
+  try {
+    await fetch(CSRF_ENDPOINT, { credentials: 'include' })
+  } catch (error) {
+    console.warn('No se pudo sincronizar la cookie CSRF', error)
+  }
 }
 
 const readSessionFromStorage = (): SessionSnapshot => {
@@ -65,7 +94,6 @@ const readSessionFromStorage = (): SessionSnapshot => {
       name: pickValue(STORAGE_FIELD_KEYS.name),
       id: pickValue(STORAGE_FIELD_KEYS.id),
       userId: pickValue(STORAGE_FIELD_KEYS.userId),
-      token: pickValue(STORAGE_FIELD_KEYS.token),
     }
   } catch (error) {
     console.warn('No se pudo leer la sesión guardada en localStorage', error)
@@ -286,37 +314,16 @@ export default function HomeDashboard() {
   const handleLogout = useCallback(async () => {
     if (isLoggingOut) return
 
-    const storedUserId = session.userId ?? (typeof window !== 'undefined' ? sanitizeValue(window.localStorage.getItem('user_id')) : null)
-    if (!storedUserId) {
-      setLogoutError('No se encontró un identificador de usuario en la sesión actual.')
-      return
-    }
-
-    const parsedUserId = Number(storedUserId)
-    if (!Number.isFinite(parsedUserId)) {
-      setLogoutError('El identificador de usuario almacenado no es válido.')
-      return
-    }
-
-    const storedToken = session.token ?? (typeof window !== 'undefined' ? sanitizeValue(window.localStorage.getItem('token')) : null)
-    if (!storedToken) {
-      setLogoutError('No encontramos un token de autenticación para esta sesión. Inicia sesión nuevamente.')
-      return
-    }
-
     setIsLoggingOut(true)
     setLogoutError(null)
 
     try {
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+      await ensureCsrfCookie()
       const response = await fetch(`${API_BASE}/api/logout`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-          Authorization: `Bearer ${storedToken}`,
-        },
-        body: JSON.stringify({ user_id: parsedUserId }),
+        headers: jsonAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({}),
       })
 
       if (!response.ok) {
@@ -327,7 +334,7 @@ export default function HomeDashboard() {
 
       if (typeof window !== 'undefined' && window.localStorage) {
         const storage = window.localStorage
-        ;['nombres', 'nombre', 'Id', 'id', 'user_id', 'token'].forEach((key) => storage.removeItem(key))
+        STORAGE_KEYS_SET.forEach((key) => storage.removeItem(key))
       }
 
       setSession({ ...DEFAULT_SESSION })
@@ -338,7 +345,7 @@ export default function HomeDashboard() {
     } finally {
       setIsLoggingOut(false)
     }
-  }, [isLoggingOut, navigate, session.userId, session.token])
+  }, [isLoggingOut, navigate])
 
   return (
     <div className="inicio-layout">

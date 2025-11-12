@@ -2,25 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
+use App\Models\CredencialWhatsapp;
 use GuzzleHttp\Client;
+use Illuminate\Http\Request;
 
 class ContactController extends Controller
 {
             public function findContacts(Request $request)
         {
             try {
-                // ✅ Validar que venga el parámetro user_id
-                $userId = $request->input('user_id');
-                if (!$userId) {
+                $user = $request->user();
+
+                if (! $user) {
                     return response()->json([
                         'error' => true,
-                        'message' => 'El parámetro user_id es requerido.'
-                    ], 422);
+                        'message' => 'Usuario no autenticado.'
+                    ], 401);
                 }
 
-                // ✅ Buscar las credenciales del usuario
-                $credencial = \App\Models\CredencialWhatsapp::where('user_id', $userId)->first();
+                $credencial = CredencialWhatsapp::where('user_id', $user->id)->first();
 
                 if (!$credencial) {
                     return response()->json([
@@ -35,7 +35,7 @@ class ContactController extends Controller
                 $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
 
                 // ✅ Consumir la API externa con Guzzle
-                $client = new \GuzzleHttp\Client();
+                $client = new Client();
                 $response = $client->post($apiUrl, [
                     'headers' => [
                         'apikey' => $apiKey,
@@ -76,17 +76,16 @@ class ContactController extends Controller
             public function filterContacts(Request $request)
         {
             try {
-                // ✅ Validar que venga el parámetro user_id
-                $userId = $request->input('user_id');
-                if (!$userId) {
+                $user = $request->user();
+
+                if (! $user) {
                     return response()->json([
                         'error' => true,
-                        'message' => 'El parámetro user_id es requerido.'
-                    ], 422);
+                        'message' => 'Usuario no autenticado.'
+                    ], 401);
                 }
 
-                // ✅ Buscar las credenciales del usuario
-                $credencial = \App\Models\CredencialWhatsapp::where('user_id', $userId)->first();
+                $credencial = CredencialWhatsapp::where('user_id', $user->id)->first();
 
                 if (!$credencial) {
                     return response()->json([
@@ -124,7 +123,7 @@ class ContactController extends Controller
                 }
 
                 // ✅ Consumir la API externa
-                $client = new \GuzzleHttp\Client();
+                $client = new Client();
                 $response = $client->post($apiUrl, [
                     'headers' => [
                         'apikey' => $apiKey,

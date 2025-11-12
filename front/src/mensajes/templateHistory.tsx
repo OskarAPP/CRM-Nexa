@@ -50,9 +50,17 @@ export interface TemplateStatus {
 const TEMPLATE_STATUS_TIMEOUT = 4000
 const MAX_MEDIA_TEMPLATE_SIZE_KB = 15360 // ~15 MB, considering base64 overhead
 const DEFAULT_HISTORY_PLACEHOLDER = '// Los resultados de sus envíos aparecerán aquí'
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000').replace(/\/$/, '')
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
 const API_TEMPLATES_PATH = '/api/plantillas'
+const CSRF_ENDPOINT = `${API_BASE_URL}/sanctum/csrf-cookie`
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 export const TEMPLATE_CHANGED_EVENT = 'crm-nexa:templates:changed'
+
+const getXsrfToken = (): string | null => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
 
 function isMessageTemplate(value: unknown): value is MessageTemplate {
   if (!value || typeof value !== 'object') return false
@@ -164,34 +172,34 @@ function dispatchTemplateEvent(detail: TemplateChangedEventDetail) {
   window.dispatchEvent(new CustomEvent<TemplateChangedEventDetail>(TEMPLATE_CHANGED_EVENT, { detail }))
 }
 
-function readStoredToken(): string | null {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return null
-  }
-  try {
-    const value = window.localStorage.getItem('token')
-    if (!value) return null
-    const trimmed = value.trim()
-    return trimmed.length > 0 ? trimmed : null
-  } catch {
-    return null
-  }
-}
+async function apiRequest<T>(endpoint: string, init: RequestInit = {}): Promise<T> {
+  const method = (init.method ?? 'GET').toUpperCase()
 
-async function apiRequest<T>(endpoint: string, init: RequestInit = {}, tokenOverride?: string): Promise<T> {
-  const token = tokenOverride ?? readStoredToken()
-  if (!token) {
-    throw new ApiError('No se encontró token de autenticación.', 401, null)
+  if (MUTATING_METHODS.has(method)) {
+    try {
+      await fetch(CSRF_ENDPOINT, { credentials: 'include' })
+    } catch (error) {
+      console.error('No se pudo sincronizar la cookie CSRF', error)
+    }
   }
 
   const headers = new Headers(init.headers ?? {})
   headers.set('Accept', 'application/json')
-  if (!(init.body instanceof FormData)) {
+  if (init.body !== undefined && !(init.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...init, headers })
+  const xsrfToken = getXsrfToken()
+  if (xsrfToken) {
+    headers.set('X-XSRF-TOKEN', xsrfToken)
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...init,
+    method,
+    headers,
+    credentials: 'include',
+  })
 
   const text = await response.text()
   let payload: unknown = null
@@ -264,14 +272,13 @@ function ensureMessageTemplate(value: unknown): MessageTemplate {
   return normalized
 }
 
-export async function fetchTemplatesFromApi(tokenOverride?: string): Promise<MessageTemplate[]> {
-  const response = await apiRequest<ApiListResponse>(`${API_TEMPLATES_PATH}`, { method: 'GET' }, tokenOverride)
+export async function fetchTemplatesFromApi(): Promise<MessageTemplate[]> {
+  const response = await apiRequest<ApiListResponse>(`${API_TEMPLATES_PATH}`, { method: 'GET' })
   return ensureMessageTemplates(response.data)
 }
 
 export async function createTemplateInApi(
   body: TemplateCreateRequest,
-  tokenOverride?: string,
 ): Promise<MessageTemplate> {
   const response = await apiRequest<ApiItemResponse & ApiMessageResponse>(
     `${API_TEMPLATES_PATH}`,
@@ -284,7 +291,6 @@ export async function createTemplateInApi(
         payload: body.payload,
       }),
     },
-    tokenOverride,
   )
 
   const template = ensureMessageTemplate(response.data)
@@ -295,7 +301,6 @@ export async function createTemplateInApi(
 export async function updateTemplateInApi(
   id: string,
   body: TemplateUpdateRequest,
-  tokenOverride?: string,
 ): Promise<MessageTemplate> {
   const response = await apiRequest<ApiItemResponse & ApiMessageResponse>(
     `${API_TEMPLATES_PATH}/${encodeURIComponent(id)}`,
@@ -308,7 +313,6 @@ export async function updateTemplateInApi(
         payload: body.payload,
       }),
     },
-    tokenOverride,
   )
 
   const template = ensureMessageTemplate(response.data)
@@ -316,11 +320,10 @@ export async function updateTemplateInApi(
   return template
 }
 
-export async function deleteTemplateInApi(id: string, tokenOverride?: string): Promise<void> {
+export async function deleteTemplateInApi(id: string): Promise<void> {
   await apiRequest<ApiMessageResponse>(
     `${API_TEMPLATES_PATH}/${encodeURIComponent(id)}`,
     { method: 'DELETE' },
-    tokenOverride,
   )
 
   dispatchTemplateEvent({ action: 'deleted' })

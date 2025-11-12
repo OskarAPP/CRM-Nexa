@@ -30,7 +30,36 @@ function ensureStylesLoaded() {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
+
+const getXsrfToken = (): string | null => {
+  if (typeof document === 'undefined') return null
+  const match = document.cookie.match(/XSRF-TOKEN=([^;]+)/)
+  return match ? decodeURIComponent(match[1]) : null
+}
+
+const jsonAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  }
+
+  const token = getXsrfToken()
+  if (token) {
+    headers['X-XSRF-TOKEN'] = token
+  }
+
+  return headers
+}
+
+const ensureCsrfCookie = async (): Promise<void> => {
+  try {
+    await fetch(CSRF_ENDPOINT, { credentials: 'include' })
+  } catch (error) {
+    console.warn('No se pudo sincronizar la cookie CSRF', error)
+  }
+}
 
 const MODULE_COMPONENTS: Record<FilterType, ComponentType<ContactsModuleProps>> = {
   all: TodosModule,
@@ -153,10 +182,13 @@ function Contacts() {
     setFilterTotals(null)
 
     try {
+      await ensureCsrfCookie()
+
       const response = await fetch(`${API_BASE}/api/find-contacts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: sessionUserId }),
+        headers: jsonAuthHeaders(),
+        credentials: 'include',
+        body: JSON.stringify({}),
       })
 
       const raw = await response.text()
@@ -273,14 +305,16 @@ function Contacts() {
     try {
       const payload: Record<string, unknown> = {
         country_code: cleanCountry || '521',
-        user_id: sessionUserId,
       }
       if (codes.length > 0) {
         payload.area_codes = codes
       }
+      await ensureCsrfCookie()
+
       const response = await fetch(`${API_BASE}/api/filter-contacts`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonAuthHeaders(),
+        credentials: 'include',
         body: JSON.stringify(payload),
       })
       const raw = await response.text()

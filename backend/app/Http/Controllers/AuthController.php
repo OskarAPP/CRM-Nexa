@@ -6,6 +6,7 @@ use App\Models\CredencialWhatsapp;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 
@@ -43,35 +44,36 @@ class AuthController extends Controller
             'direccion' => $data['direccion'],
         ]);
 
-        // Crear token al registrarse
-        $token = $user->createToken('auth_token')->plainTextToken;
+        Auth::login($user);
+        $request->session()->regenerate();
 
         return response()->json([
             'message' => 'Usuario registrado correctamente',
             'user' => $user->makeHidden(['password']),
-            'token' => $token,
         ], 201);
     }
 
-    // Login con token y consulta de credenciales WhatsApp
+    // Login con sesión y consulta de credenciales WhatsApp
     public function login(Request $request)
     {
-        $data = $request->validate([
+        $credentials = $request->validate([
             'email' => 'required|email',
             'password' => 'required|string',
         ]);
 
-        $user = User::where('email', $data['email'])->first();
-
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+        if (! Auth::attempt($credentials)) {
             return response()->json([
                 'message' => 'Credenciales inválidas'
             ], 401);
         }
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+        $request->session()->regenerate();
 
-        $credencial = CredencialWhatsapp::where('user_id', $user->id)->first();
+        $user = $request->user();
+
+        $credencial = $user
+            ? CredencialWhatsapp::where('user_id', $user->id)->first()
+            : null;
 
         $whatsappSession = null;
 
@@ -86,8 +88,7 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Inicio de sesión correcto',
-            'user' => $user->makeHidden(['password']),
-            'token' => $token,
+            'user' => $user ? $user->makeHidden(['password']) : null,
             'credencial_whatsapp' => $credencial,
             'whatsapp_session' => $whatsappSession,
             'whatsapp_api_response' => $whatsappSession,
@@ -98,13 +99,6 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $user = $request->user();
-
-        if (! $user) {
-            $userId = $request->input('user_id');
-            if ($userId) {
-                $user = User::find($userId);
-            }
-        }
 
         if (! $user) {
             return response()->json([
@@ -137,7 +131,9 @@ class AuthController extends Controller
             $credencial->makeHidden(['instancia', 'apikey']);
         }
 
-        $user->tokens()->delete();
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
         return response()->json([
             'message' => 'Logout realizado correctamente',
@@ -149,13 +145,6 @@ class AuthController extends Controller
     public function whatsappStatus(Request $request)
     {
         $user = $request->user();
-
-        if (! $user) {
-            $userId = $request->query('user_id');
-            if ($userId) {
-                $user = User::find($userId);
-            }
-        }
 
         if (! $user) {
             return response()->json([
@@ -200,6 +189,21 @@ class AuthController extends Controller
             'whatsapp_session' => $session,
             'whatsapp_api_response' => $session,
         ], $httpCode);
+    }
+
+    public function me(Request $request)
+    {
+        $user = $request->user();
+
+        if (! $user) {
+            return response()->json([
+                'message' => 'Usuario no autenticado'
+            ], 401);
+        }
+
+        return response()->json([
+            'user' => $user->makeHidden(['password'])
+        ], 200);
     }
 
     protected function requestEvolutionConnect(CredencialWhatsapp $credencial): array
