@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Registro de Usuario</title>
+	<style>
+		:root {
+			font-family: Arial, sans-serif;
+			background-color: #f4f6f8;
+			color: #1f2933;
+			line-height: 1.5;
+		}
+
+		body {
+			margin: 0;
+			display: flex;
+			min-height: 100vh;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.card {
+			background: #fff;
+			width: min(420px, 92vw);
+			border-radius: 10px;
+			padding: 28px 32px;
+			box-shadow: 0 15px 35px rgba(15, 23, 42, 0.15);
+		}
+
+		h1 {
+			font-size: 1.6rem;
+			margin: 0 0 18px;
+			text-align: center;
+		}
+
+		form {
+			display: grid;
+			gap: 16px;
+		}
+
+		label {
+			display: flex;
+			flex-direction: column;
+			font-size: 0.92rem;
+			gap: 6px;
+		}
+
+		input,
+		textarea {
+			font: inherit;
+			padding: 10px 12px;
+			border: 1px solid #cbd2d9;
+			border-radius: 6px;
+			transition: border-color 0.2s ease;
+		}
+
+		input:focus,
+		textarea:focus {
+			outline: none;
+			border-color: #2563eb;
+			box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+		}
+
+		button {
+			margin-top: 8px;
+			padding: 12px 18px;
+			font: inherit;
+			border: none;
+			border-radius: 6px;
+			background: #2563eb;
+			color: #fff;
+			cursor: pointer;
+			transition: background 0.2s ease;
+		}
+
+		button:hover {
+			background: #1e4dcc;
+		}
+
+		.row {
+			display: grid;
+			gap: 12px;
+		}
+
+		@media (min-width: 560px) {
+			.row.two-cols {
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+			}
+		}
+
+		small {
+			font-size: 0.78rem;
+			color: #52606d;
+		}
+	</style>
+</head>
+<body>
+	<section class="card">
+		<h1>Crear Cuenta</h1>
+		<form id="registro-form">
+			<div class="row two-cols">
+				<label>
+					Nombres
+					<input type="text" name="nombres" maxlength="255" required>
+				</label>
+				<label>
+					Apellidos
+					<input type="text" name="apellidos" maxlength="255" required>
+				</label>
+			</div>
+
+			<label>
+				Número telefónico
+				<input type="tel" name="numero_telefonico" maxlength="20" required>
+			</label>
+
+			<label>
+				Correo electrónico
+				<input type="email" name="email" maxlength="255" required>
+			</label>
+
+			<div class="row two-cols">
+				<label>
+					Contraseña
+					<input type="password" name="password" minlength="6" required>
+					<small>Mínimo 6 caracteres</small>
+				</label>
+				<label>
+					Confirmar contraseña
+					<input type="password" name="password_confirmation" minlength="6" required>
+				</label>
+			</div>
+
+			<label>
+				Estado
+				<input type="text" name="estado" maxlength="100" required>
+			</label>
+
+			<label>
+				Municipio
+				<input type="text" name="municipio" maxlength="100" required>
+			</label>
+
+			<label>
+				Dirección
+				<textarea name="direccion" rows="3" required></textarea>
+			</label>
+
+			<button type="submit">Registrarme</button>
+		</form>
+		<p id="form-message"></p>
+		<pre class="console" id="console-output" aria-live="polite"></pre>
+	</section>
+
+	<script>
+		const form = document.getElementById('registro-form');
+		const messageBox = document.getElementById('form-message');
+		const consoleBox = document.getElementById('console-output');
+
+		// Determina la URL base de la API; usa localhost si el archivo se abre con file://
+		const apiBase = window.location.protocol.startsWith('http')
+			? window.location.origin
+			: 'http://localhost:8000';
+		const endpoint = `${apiBase}/api/register`;
+
+		form.addEventListener('submit', async (event) => {
+			event.preventDefault();
+			messageBox.textContent = 'Registrando usuario…';
+			messageBox.style.color = '#2563eb';
+			consoleBox.textContent = 'Enviando solicitud...';
+
+			const formData = new FormData(form);
+			const payload = Object.fromEntries(formData.entries());
+
+			try {
+				const response = await fetch(endpoint, {
+					method: 'POST',
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(payload)
+				});
+
+				const data = await response.json();
+				consoleBox.textContent = JSON.stringify({
+					status: response.status,
+					ok: response.ok,
+					body: data
+				}, null, 2);
+
+				if (!response.ok) {
+					const errors = data.errors ? Object.values(data.errors).flat().join(' ') : data.message;
+					throw new Error(errors || 'No se pudo completar el registro.');
+				}
+
+				messageBox.textContent = data.message ?? 'Usuario registrado exitosamente.';
+				messageBox.style.color = '#15803d';
+				if (data && data.user && data.user.id) {
+					localStorage.setItem('lastRegisteredUserId', String(data.user.id));
+					localStorage.setItem('lastRegisteredUser', JSON.stringify(data.user));
+					const fullName = [data.user.nombres ?? '', data.user.apellidos ?? '']
+						.filter(Boolean)
+						.join(' ');
+					if (fullName) {
+						localStorage.setItem('lastRegisteredUserName', fullName);
+					} else {
+						localStorage.removeItem('lastRegisteredUserName');
+					}
+				} else {
+					localStorage.removeItem('lastRegisteredUserId');
+					localStorage.removeItem('lastRegisteredUser');
+					localStorage.removeItem('lastRegisteredUserName');
+				}
+				form.reset();
+				setTimeout(() => {
+					window.location.href = 'registrowp.html';
+				}, 600);
+			} catch (error) {
+				messageBox.textContent = error.message ?? 'Ocurrió un error inesperado.';
+				messageBox.style.color = '#b91c1c';
+				consoleBox.textContent = `Error: ${error.message}`;
+			}
+		});
+	</script>
+</body>
+</html>

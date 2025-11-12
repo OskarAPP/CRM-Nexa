@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Registrar Credencial de WhatsApp</title>
+	<style>
+		:root {
+			font-family: Arial, sans-serif;
+			background-color: #f4f6f8;
+			color: #1f2933;
+			line-height: 1.5;
+		}
+
+		body {
+			margin: 0;
+			display: flex;
+			min-height: 100vh;
+			align-items: center;
+			justify-content: center;
+		}
+
+		.card {
+			background: #fff;
+			width: min(420px, 92vw);
+			border-radius: 10px;
+			padding: 28px 32px;
+			box-shadow: 0 15px 35px rgba(15, 23, 42, 0.15);
+		}
+
+		h1 {
+			font-size: 1.6rem;
+			margin: 0 0 14px;
+			text-align: center;
+		}
+
+		p.helper {
+			font-size: 0.9rem;
+			margin: 0 0 16px;
+			text-align: center;
+			color: #52606d;
+		}
+
+		form {
+			display: grid;
+			gap: 16px;
+		}
+
+		label {
+			display: flex;
+			flex-direction: column;
+			font-size: 0.92rem;
+			gap: 6px;
+		}
+
+		input {
+			font: inherit;
+			padding: 10px 12px;
+			border: 1px solid #cbd2d9;
+			border-radius: 6px;
+			transition: border-color 0.2s ease;
+		}
+
+		input:focus {
+			outline: none;
+			border-color: #2563eb;
+			box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+		}
+
+		input[readonly] {
+			background-color: #f1f5f9;
+			cursor: not-allowed;
+		}
+
+		button {
+			padding: 12px 18px;
+			font: inherit;
+			border: none;
+			border-radius: 6px;
+			background: #2563eb;
+			color: #fff;
+			cursor: pointer;
+			transition: background 0.2s ease;
+		}
+
+		button:hover {
+			background: #1e4dcc;
+		}
+
+		button.secondary {
+			margin-top: 12px;
+			background: #475569;
+		}
+
+		button.secondary:hover {
+			background: #334155;
+		}
+
+		#form-message {
+			margin-top: 8px;
+			font-size: 0.9rem;
+		}
+
+		.console {
+			margin-top: 16px;
+			padding: 12px;
+			background: #0f172a;
+			color: #e2e8f0;
+			border-radius: 8px;
+			max-height: 220px;
+			overflow: auto;
+			font-size: 0.82rem;
+		}
+	</style>
+</head>
+<body>
+	<section class="card">
+		<h1>Credencial de WhatsApp</h1>
+		<p class="helper">Carga el ID del usuario recién registrado y completa los campos faltantes.</p>
+		<form id="whatsapp-form">
+			<label>
+				ID de usuario
+				<input type="number" id="user-id" name="user_id" readonly required>
+			</label>
+			<label>
+				Nombre del usuario
+				<input type="text" id="user-name" readonly>
+			</label>
+			<label>
+				Instancia
+				<input type="text" name="instancia" id="instancia" maxlength="255" required>
+			</label>
+			<label>
+				ApiKey
+				<input type="text" name="apikey" id="apikey" maxlength="50" required>
+			</label>
+			<button type="submit" id="submit-btn">Guardar credencial</button>
+		</form>
+		<button type="button" class="secondary" id="sync-user">Sincronizar ID nuevamente</button>
+		<p id="form-message"></p>
+		<pre class="console" id="console-output" aria-live="polite"></pre>
+	</section>
+
+	<script>
+		const form = document.getElementById('whatsapp-form');
+		const userIdInput = document.getElementById('user-id');
+		const userNameInput = document.getElementById('user-name');
+		const messageBox = document.getElementById('form-message');
+		const consoleBox = document.getElementById('console-output');
+		const syncButton = document.getElementById('sync-user');
+		const submitButton = document.getElementById('submit-btn');
+
+		const apiBase = window.location.protocol.startsWith('http')
+			? window.location.origin
+			: 'http://localhost:8000';
+		const endpoint = `${apiBase}/api/credenciales-whatsapp`;
+
+		const toggleFormAvailability = (enabled) => {
+			form.instancia.disabled = !enabled;
+			form.apikey.disabled = !enabled;
+			submitButton.disabled = !enabled;
+		};
+
+		const loadStoredUser = (showMessage = true) => {
+			let storedUserId = localStorage.getItem('lastRegisteredUserId');
+			const storedUser = localStorage.getItem('lastRegisteredUser');
+			let storedName = localStorage.getItem('lastRegisteredUserName');
+			if (!storedUserId && storedUser) {
+				try {
+					const parsed = JSON.parse(storedUser);
+					storedUserId = parsed && parsed.id ? String(parsed.id) : null;
+					if (!storedName && parsed) {
+						const fullName = [parsed.nombres ?? '', parsed.apellidos ?? '']
+							.filter(Boolean)
+							.join(' ');
+						storedName = fullName || null;
+					}
+				} catch (error) {
+					storedUserId = null;
+				}
+			}
+
+			if (storedUserId) {
+				userIdInput.value = storedUserId;
+				userNameInput.value = storedName ?? '';
+				if (showMessage) {
+					messageBox.textContent = `ID del usuario cargado: ${storedUserId}`;
+					messageBox.style.color = '#2563eb';
+				}
+				toggleFormAvailability(true);
+			} else {
+				userIdInput.value = '';
+				userNameInput.value = '';
+				messageBox.textContent = 'No hay un usuario registrado. Vuelve al formulario de registro y crea uno nuevo.';
+				messageBox.style.color = '#b91c1c';
+				toggleFormAvailability(false);
+			}
+		};
+
+		loadStoredUser();
+
+		syncButton.addEventListener('click', () => {
+			loadStoredUser(true);
+			consoleBox.textContent = 'Sincronización solicitada.';
+		});
+
+		form.addEventListener('submit', async (event) => {
+			event.preventDefault();
+
+			if (!userIdInput.value) {
+				messageBox.textContent = 'No hay ID de usuario disponible.';
+				messageBox.style.color = '#b91c1c';
+				consoleBox.textContent = 'Error: falta el ID de usuario.';
+				return;
+			}
+
+			const payload = {
+				user_id: Number(userIdInput.value),
+				instancia: form.instancia.value.trim(),
+				apikey: form.apikey.value.trim()
+			};
+
+			messageBox.textContent = 'Guardando credencial…';
+			messageBox.style.color = '#2563eb';
+			consoleBox.textContent = 'Enviando solicitud...';
+
+			try {
+				const response = await fetch(endpoint, {
+					method: 'POST',
+					headers: {
+						'Accept': 'application/json',
+						'Content-Type': 'application/json'
+					},
+					body: JSON.stringify(payload)
+				});
+
+				const data = await response.json();
+				consoleBox.textContent = JSON.stringify({
+					status: response.status,
+					ok: response.ok,
+					body: data
+				}, null, 2);
+
+				if (!response.ok) {
+					const errors = data.errors ? Object.values(data.errors).flat().join(' ') : data.message;
+					throw new Error(errors || 'No se pudo guardar la credencial.');
+				}
+
+				messageBox.textContent = data.success ? 'Credencial guardada correctamente.' : (data.message ?? 'Credencial guardada.');
+				messageBox.style.color = '#15803d';
+				form.reset();
+				loadStoredUser(false);
+			} catch (error) {
+				messageBox.textContent = error.message ?? 'Ocurrió un error inesperado.';
+				messageBox.style.color = '#b91c1c';
+				consoleBox.textContent = `Error: ${error.message}`;
+			}
+		});
+	</script>
+</body>
+</html>
