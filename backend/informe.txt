@@ -1,0 +1,65 @@
+Informe de Seguridad CRM Nexa
+============================
+
+Fecha: 2025-11-12
+
+1. Resumen ejecutivo
+--------------------
+- El backend Laravel expone endpoints clave sin autenticación robusta y con CORS completamente abierto, lo que permite a terceros invocar acciones sensibles usando solo un `user_id`.
+- Las credenciales de WhatsApp (instancia y API key) se almacenan en texto claro y se devuelven desde la API, lo que facilita su fuga.
+- El frontend React y las páginas HTML estáticas almacenan tokens e identificadores en `localStorage` y realizan peticiones sin encabezados de autorización, por lo que cualquier script o sitio externo puede reutilizar sesiones.
+- No existen controles adicionales como rate limiting específico, verificación de correo, MFA o auditoría, dejando expuesta la plataforma ante ataques automatizados.
+
+2. Decisiones acertadas actuales
+--------------------------------
+- Uso de Laravel Sanctum y hashing de contraseñas con `Hash::make`, lo que mantiene las credenciales de usuarios protegidas en la base de datos.
+- Validaciones de entrada en controladores (`$request->validate`) que reducen el riesgo de inyección directa y aseguran formatos esperados.
+- Normalización y ocultamiento parcial de campos sensibles en algunas respuestas (`makeHidden`) para proteger datos en las APIs principales.
+- Separación backend/frontend y uso de variables de entorno (`services.evolution.base_url`), lo que facilita aislar secretos en despliegues futuros.
+
+3. Hallazgos críticos
+---------------------
+- **Autenticación omitida en endpoints sensibles:** rutas como `/api/find-contacts`, `/api/filter-contacts`, `/api/send-message`, `/api/send-media` y `/api/credenciales-whatsapp` aceptan peticiones sin `auth:sanctum`, bastando conocer un `user_id` para acceder a datos o disparar mensajes.
+- **Exposición de API keys:** `CredencialWhatsappController::index` y `store` devuelven `apikey` e `instancia` en texto claro; además el formulario `registrowp.html` las carga y envía desde el navegador sin cifrado.
+- **CORS completamente abierto (`allowed_origins => ['*']`):** cualquier origen puede llamar a la API y, como no se exigen credenciales, la superficie de ataque se amplía.
+- **Token de acceso sin uso:** el login genera tokens de Sanctum pero el frontend no envía encabezado `Authorization`, por lo que los endpoints protegidos no pueden distinguir usuarios autenticados; esto también provoca guardado inseguro en `localStorage`.
+- **Formularios locales sin CSRF ni HTTPS:** `registro.html` y `registrowp.html` pueden abrirse vía `file://`, enviando credenciales en texto plano a `http://localhost:8000`, exponiendo tráfico y facilitando ataques MITM si se despliega sin TLS.
+
+4. Riesgos medios y observaciones
+---------------------------------
+- Uso de `EnsureFrontendRequestsAreStateful` en el grupo `api` sin implementar cookies HttpOnly; esta mezcla genera confusión y puede abrir la puerta a sesiones no deseadas.
+- Falta de listas de control de acceso: no hay políticas o gates para limitar operaciones por rol (todos los usuarios pueden registrar credenciales y enviar mensajes).
+- No se aplica ofuscación ni cifrado a campos sensibles en repositorio o backups (las credenciales quedan visibles a cualquier operador con acceso a la base).
+- Ausencia de mecanismos de auditoría (logs detallados, alertas) que permitan detectar abuso o fuga de datos.
+- El frontend carga librerías externas (Font Awesome, flag-icons) desde CDN sin integridad (SRI), aumentando riesgo de supply-chain en producción.
+
+5. Recomendaciones prioritarias
+-------------------------------
+1. **Cerrar el acceso público:** exigir `auth:sanctum` (o equivalente) en todos los endpoints bajo `/api`, incluyendo credenciales, contactos y mensajería. Retirar el fallback que acepta `user_id` cuando no hay usuario autenticado.
+2. **Ajustar CORS:** limitar `allowed_origins` a los dominios oficiales (`https://tu-dominio.com`, `https://app.tu-dominio.com`) y habilitar `supports_credentials` solo si se adoptan cookies HttpOnly.
+3. **Usar cookies seguras o encabezados explícitos:** decidir entre Sanctum con cookies SameSite+HttpOnly o tokens Bearer. En ambos casos, actualizar el frontend para enviar el token en cada llamada y evitar almacenarlo en `localStorage`.
+4. **Proteger credenciales de WhatsApp:** encriptar `apikey`/`instancia` con `Crypt::encryptString`, ocultarlas en modelos (`$hidden`), y no retornarlas nunca por API salvo a usuarios autorizados.
+5. **Forzar HTTPS y CSRF:** desplegar el backend detrás de TLS, redirigir a HTTPS, y usar protecciones CSRF en formularios servidos por Laravel; para los formularios estáticos, moverlos a vistas Blade o protegerlos con cabeceras CSRF.
+
+6. Sugerencias complementarias
+------------------------------
+- Implementar verificación de correo, recuperación de contraseña y contraseñas robustas (p. ej. requisitos de complejidad y expiración opcional).
+- Añadir límites de tasa específicos (`RateLimiter::for('login', ...)`) y bloqueo temporal tras múltiples intentos fallidos.
+- Crear roles (admin, operador, invitado) y políticas de autorización que controlen quién puede registrar credenciales o enviar campañas.
+- Incorporar un sistema de logging estructurado (Monolog + Stackdriver/ELK) para rastrear altas, envíos y sesiones.
+- Validar datos contra listas blancas (por ejemplo, restringir `numeros` a prefijos autorizados) y sanitizar salidas antes de renderizar en el frontend.
+- Configurar encabezados de seguridad (CSP, HSTS, X-Frame-Options) en `AppServiceProvider` para endurecer la superficie web.
+- Revisar dependencias NPM/PHP con `npm audit` y `composer audit`, aplicando actualizaciones de seguridad periódicas.
+
+7. Mejor opción estratégica
+---------------------------
+Adoptar un modelo de autenticación centralizado con Laravel Sanctum en modo SPA: emitir cookies HttpOnly con SameSite=Lax, servir el frontend desde el mismo dominio/aplicación (o subdominio autorizado) bajo HTTPS y mantener las APIs detrás de middleware `auth:sanctum`. Paralelamente, cifrar las credenciales externas en repositorio y limitar su acceso a usuarios con rol administrador. Esta combinación minimiza la fuga de tokens, obliga a pasar por el backend para toda operación sensible y crea una base sólida para futuras extensiones (MFA, auditorías, limitación por rol).
+
+8. Próximos pasos sugeridos
+---------------------------
+- Definir matriz de roles y ajustar rutas/middlewares acorde.
+- Actualizar el frontend para incluir el flujo de autenticación elegido y eliminar dependencias de `localStorage` para datos sensibles.
+- Programar pruebas de penetración básicas (OWASP API Security Top 10) tras aplicar los cambios.
+- Documentar políticas de gestión de API keys y rotación periódica (tanto para Evolution como para accesos internos).
+
+Con la aplicación de estas medidas, la plataforma reducirá sustancialmente su superficie de ataque y estará preparada para cumplir con requisitos de seguridad corporativa y regulatorios.
