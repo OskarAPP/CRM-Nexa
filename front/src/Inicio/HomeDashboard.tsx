@@ -8,6 +8,7 @@ import {
   ApiError,
   type MessageTemplate,
 } from '../mensajes/templateHistory'
+import { useAuthContext } from '../auth/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
@@ -112,6 +113,7 @@ export default function HomeDashboard() {
   const [logoutError, setLogoutError] = useState<string | null>(null)
   const [templates, setTemplates] = useState<MessageTemplate[]>([])
   const navigate = useNavigate()
+  const { markLoggedOut } = useAuthContext()
 
   const refreshSession = useCallback(() => {
     setSession(readSessionFromStorage())
@@ -338,6 +340,7 @@ export default function HomeDashboard() {
       }
 
       setSession({ ...DEFAULT_SESSION })
+      markLoggedOut()
       navigate('/login', { replace: true })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -345,7 +348,7 @@ export default function HomeDashboard() {
     } finally {
       setIsLoggingOut(false)
     }
-  }, [isLoggingOut, navigate])
+  }, [isLoggingOut, markLoggedOut, navigate])
 
   return (
     <div className="inicio-layout">

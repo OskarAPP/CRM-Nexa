@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './login.css'
+import { useAuthContext } from '../auth/AuthContext'
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const SERVER_BASE = API_BASE.replace(/\/$/, '')
@@ -230,6 +231,7 @@ function persistAuthSnapshot(payload: LoginSuccessPayload) {
 
 export default function Login() {
   const navigate = useNavigate()
+  const { markAuthenticated, markLoggedOut, status } = useAuthContext()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -275,6 +277,12 @@ export default function Login() {
       if (interval) clearInterval(interval)
     }
   }, [stage, timeLeft])
+
+  useEffect(() => {
+    if (status === 'authenticated' && stage === 'form') {
+      navigate('/home-dashboard', { replace: true })
+    }
+  }, [status, stage, navigate])
 
   useEffect(() => {
     if (stage !== 'qr') {
@@ -418,19 +426,19 @@ export default function Login() {
   }, [stage, lastLoginPayload, navigate])
 
   async function requestLoginPayload(): Promise<LoginSuccessPayload> {
-  await ensureCsrfCookie()
+    await ensureCsrfCookie()
 
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    }
 
-  const xsrfToken = getXsrfToken()
-  if (xsrfToken) {
-    headers['X-XSRF-TOKEN'] = xsrfToken
-  }
+    const xsrfToken = getXsrfToken()
+    if (xsrfToken) {
+      headers['X-XSRF-TOKEN'] = xsrfToken
+    }
 
-  const res = await fetch(`${API_BASE}/api/login`, {
+    const res = await fetch(`${API_BASE}/api/login`, {
       method: 'POST',
       headers,
       credentials: 'include',
@@ -442,6 +450,7 @@ export default function Login() {
     }
 
     const payload = (await res.json()) as LoginSuccessPayload
+    markAuthenticated(payload.user ?? null)
     persistAuthSnapshot(payload)
     return payload
   }
@@ -466,6 +475,7 @@ export default function Login() {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Error desconocido'
       setErrorMessage(message)
+      markLoggedOut()
       setIsQrLoading(false)
       setStage('form')
     } finally {
@@ -523,6 +533,10 @@ export default function Login() {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
+
+  if (status === 'checking' && stage === 'form') {
+    return <div className="auth-gate">Verificando sesión...</div>
   }
 
   return (
@@ -686,7 +700,7 @@ export default function Login() {
               )}
               {qrSrc && (
                 <img
-                  src={qrSrc}
+                  src={qrSrc ?? undefined}
                   alt="Código QR para vincular WhatsApp"
                   onLoad={handleQrLoad}
                   onError={handleQrError}
