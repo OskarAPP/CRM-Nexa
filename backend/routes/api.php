@@ -12,6 +12,7 @@ use App\Http\Controllers\UsuarioController;
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
@@ -19,11 +20,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/instance/connectionState/{instance}', [InstanceController::class, 'connectionState']);
     Route::get('/perfil', [AuthController::class, 'perfil']); // ejemplo
 
-    Route::prefix('credenciales-whatsapp')->group(function () {
-        Route::get('/', [CredencialWhatsappController::class, 'index']);
-        Route::post('/', [CredencialWhatsappController::class, 'store']);
-    });
-
+    
     Route::post('/find-contacts', [ContactController::class, 'findContacts']);
     Route::post('/filter-contacts', [ContactController::class, 'filterContacts']);
     Route::post('/send-message', [MessageController::class, 'sendMessage']);
@@ -34,6 +31,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/plantillas', [PlantillaController::class, 'store']);
     Route::put('/plantillas/{id}', [PlantillaController::class, 'update']);
     Route::delete('/plantillas/{id}', [PlantillaController::class, 'destroy']);
+
+    Route::apiResource('credenciales-whatsapp', CredencialWhatsappController::class)->only([
+        'index', 'store', 'show', 'update', 'destroy'
+    ]);
+
+    Route::apiResource('usuarios', UsuarioController::class)->only([
+        'index', 'store', 'show', 'update', 'destroy'
+    ]);
 });
 
 Route::prefix('usuarios')->group(function () {
