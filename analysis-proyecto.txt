@@ -2,7 +2,7 @@
                     ANÁLISIS COMPLETO DEL PROYECTO CRM-NEXA
 ================================================================================
 
-Fecha de análisis: 2025-12-03
+Fecha de análisis: 2024-12-03
 Proyecto: CRM-Nexa - Sistema de gestión de relaciones con clientes integrado con WhatsApp
 Repositorio: OskarAPP/CRM-Nexa
 
@@ -833,7 +833,7 @@ CRM-Nexa/
    
    PHP:
    - Requerido: ^8.1
-   - PHP 8.1: Soporte de seguridad hasta Nov 2024
+   - PHP 8.1: Soporte de seguridad hasta Nov 2025
    - RECOMENDACIÓN: Migrar a PHP 8.2 o 8.3 para soporte extendido
    
    Otras dependencias:
