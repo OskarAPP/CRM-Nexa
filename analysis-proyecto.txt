@@ -1,0 +1,1089 @@
+================================================================================
+                    ANÁLISIS COMPLETO DEL PROYECTO CRM-NEXA
+================================================================================
+
+Fecha de análisis: 2025-12-03
+Proyecto: CRM-Nexa - Sistema de gestión de relaciones con clientes integrado con WhatsApp
+Repositorio: OskarAPP/CRM-Nexa
+
+================================================================================
+1. SEGURIDAD UTILIZADA EN EL PROYECTO
+================================================================================
+
+1.1 MECANISMOS DE AUTENTICACIÓN
+---------------------------------
+
+1.1.1 Laravel Sanctum (Stateful API Authentication)
+   - Ubicación: backend/config/sanctum.php
+   - Implementación: Laravel Sanctum v3.3
+   - Tipo: Autenticación basada en sesiones para SPA (Single Page Application)
+   - Guard principal: 'web' (configurado en sanctum.php línea 36)
+   - Middleware: auth:sanctum utilizado en todas las rutas protegidas (backend/routes/api.php líneas 15-37)
+   
+1.1.2 Sistema de Sesiones
+   - Driver: file (backend/config/session.php línea 21)
+   - Lifetime: 120 minutos (backend/config/session.php línea 34)
+   - Cookie de sesión: encriptada y con HttpOnly habilitado
+   - Configuración de cookies:
+     * http_only: true (línea 184) - Protección contra XSS
+     * same_site: 'lax' (línea 199) - Protección parcial contra CSRF
+     * secure: configurable via SESSION_SECURE_COOKIE (línea 171)
+   - Regeneración de sesión: Implementada en login/logout (AuthController.php líneas 48, 70, 136)
+
+1.1.3 Cookies de Autenticación
+   - Cookie XSRF-TOKEN: Utilizada para validación CSRF en requests AJAX
+   - Frontend obtiene token: Login.tsx líneas 19-23, mensajes.tsx líneas 16-20
+   - Cookie de sesión: Encriptada mediante EncryptCookies middleware
+
+1.1.4 Credenciales de Usuarios
+   - Hash de contraseñas: bcrypt con 10 rounds (backend/config/hashing.php líneas 18, 32)
+   - Implementación: Hash::make() en AuthController.php línea 41
+   - Validación: Auth::attempt() en AuthController.php línea 64
+   - Confirmación de password requerida: 'confirmed' en registro (AuthController.php línea 30)
+
+1.2 MÉTODOS DE AUTORIZACIÓN
+----------------------------
+
+1.2.1 Middleware de Autorización
+   - Sanctum authentication middleware: backend/app/Http/Kernel.php línea 42
+   - EnsureFrontendRequestsAreStateful: Garantiza que requests del frontend mantienen estado
+   - Middleware 'auth:sanctum': Protege todas las rutas de la API excepto login/register
+
+1.2.2 Verificación de Propiedad de Recursos
+   - Plantillas: Validación user_id (PlantillaController.php líneas 18, 32, 79)
+   - Credenciales WhatsApp: Filtrado por user_id (ContactController.php líneas 23, 88)
+   - Mensajes: Verificación de usuario autenticado antes de envío
+
+1.2.3 Control de Acceso a Rutas
+   Frontend (React Router):
+   - RequireAuth wrapper: front/src/auth/RequireAuth.tsx
+   - RedirectIfAuthenticated: front/src/auth/RedirectIfAuthenticated.tsx
+   - Rutas protegidas: /mensajes, /contactos, /home-dashboard
+
+1.3 PROTECCIÓN CONTRA ATAQUES COMUNES
+--------------------------------------
+
+1.3.1 Protección CSRF (Cross-Site Request Forgery)
+   - Middleware: VerifyCsrfToken habilitado para grupo 'web' (Kernel.php línea 37)
+   - Token XSRF: Enviado en header 'X-XSRF-TOKEN' desde frontend
+   - Cookie CSRF: Endpoint /sanctum/csrf-cookie para obtener token
+   - Verificación: Sanctum valida automáticamente tokens CSRF en requests stateful
+
+1.3.2 Protección XSS (Cross-Site Scripting)
+   - React: Escape automático de datos en JSX
+   - HttpOnly cookies: Previene acceso JavaScript a cookies de sesión (session.php línea 184)
+   - Content-Type headers: Forzado a 'application/json' en todas las respuestas API
+   - Sanitización en backend: sanitizeEvolutionPayload() remueve campos sensibles (AuthController.php líneas 341-360)
+
+1.3.3 Protección SQL Injection
+   - Eloquent ORM: Uso exclusivo de prepared statements
+   - Validación de entrada: Implementada en todos los controllers
+   - Ejemplos:
+     * $request->validate() en AuthController.php líneas 25-34, 59-62
+     * Eloquent where() en lugar de raw queries
+     * No se detectaron raw queries sin binding
+
+1.3.4 CORS (Cross-Origin Resource Sharing)
+   - Configuración: backend/config/cors.php
+   - Paths permitidos: ['api/*', 'sanctum/csrf-cookie'] (línea 18)
+   - Métodos permitidos: Todos ['*'] (línea 20)
+   - Orígenes permitidos: Configurables via CORS_ALLOWED_ORIGINS
+     * Por defecto: localhost:5173, 127.0.0.1:5173, localhost:8000, 127.0.0.1:8000
+   - Credentials: true (línea 32) - Permite cookies en requests cross-origin
+   - Headers permitidos: Todos ['*'] (línea 26)
+   - Middleware: HandleCors en stack global (Kernel.php línea 19)
+
+1.3.5 Rate Limiting
+   - Middleware: ThrottleRequests aplicado al grupo 'api' (Kernel.php línea 43)
+   - Configuración: ':api' (usa configuración por defecto de Laravel)
+   - Ubicación: Implementado en nivel de framework
+
+1.3.6 Sanitización de Datos
+   - TrimStrings middleware: Limpia espacios en blanco (Kernel.php línea 22)
+   - ConvertEmptyStringsToNull: Normaliza strings vacíos (Kernel.php línea 23)
+   - Sanitización de respuestas API: sanitizeEvolutionPayload() elimina apikeys y tokens
+     * Campos removidos: apikey, apiKey, api_key, token, session, sessionToken (AuthController.php líneas 345-356)
+
+1.3.7 Validación de Entrada
+   - Validación en registro: nombres, apellidos, email, password, etc. (AuthController.php líneas 25-34)
+   - Validación en mensajes: numeros, mensaje requeridos (MessageController.php líneas 13-16)
+   - Validación en plantillas: name, type, payload (PlantillaController.php líneas 47-52)
+   - Validación de tipos: Rule::in() para valores permitidos
+
+1.4 POLÍTICAS DE SEGURIDAD DEFINIDAS
+-------------------------------------
+
+1.4.1 Headers de Seguridad
+   - CORS headers: Configurados en cors.php
+   - Content-Type: Forzado a application/json en APIs
+   - Accept: application/json requerido en requests
+   
+   NOTA: No se detectaron configuraciones explícitas de:
+   - Content-Security-Policy (CSP)
+   - X-Frame-Options
+   - X-Content-Type-Options
+   - Strict-Transport-Security (HSTS)
+   - Estas deberían configurarse en producción
+
+1.4.2 Políticas de Sesión
+   - Session lifetime: 120 minutos
+   - Session encryption: No habilitada (session.php línea 49)
+   - Session cookie same-site: 'lax'
+   - Regeneración automática en login/logout
+
+1.4.3 Políticas de Contraseña
+   - Longitud mínima: 6 caracteres (AuthController.php línea 30)
+   - Confirmación requerida: 'confirmed' validation rule
+   - Hash: bcrypt con 10 rounds
+   
+   RECOMENDACIÓN: Aumentar longitud mínima a 8-12 caracteres
+
+1.4.4 Manejo de Errores
+   - Debug mode: Configurable via APP_DEBUG (.env.example línea 4)
+   - Por defecto debug=true en desarrollo (riesgo si se usa en producción)
+   - Handler de excepciones: backend/app/Exceptions/Handler.php
+
+================================================================================
+2. TECNOLOGÍAS Y HERRAMIENTAS EMPLEADAS
+================================================================================
+
+2.1 FRAMEWORKS Y LIBRERÍAS BACKEND
+-----------------------------------
+
+2.1.1 Framework Principal: Laravel 10
+   - Versión: ^10.0 (composer.json línea 12)
+   - PHP requerido: ^8.1 (composer.json línea 8)
+   - Tipo: Framework PHP full-stack
+   - Arquitectura: MVC (Model-View-Controller)
+
+2.1.2 Dependencias Backend Principales
+   
+   Autenticación y Seguridad:
+   - laravel/sanctum: ^3.3 (autenticación API basada en tokens/sesiones)
+   - laravel/tinker: ^2.8 (REPL para Laravel)
+   
+   HTTP y API:
+   - guzzlehttp/guzzle: ^7.2 (cliente HTTP para APIs externas)
+   - illuminate/http: * (componente HTTP de Laravel)
+   
+   Base de Datos:
+   - doctrine/dbal: ^3.10 (abstracción de base de datos)
+   
+   Testing y Desarrollo:
+   - fakerphp/faker: ^1.9.1 (generación de datos de prueba)
+   - phpunit/phpunit: ^10.0 (framework de testing)
+   - mockery/mockery: ^1.4.4 (mocking para tests)
+   - laravel/pint: ^1.0 (linter de código PHP)
+   - laravel/sail: ^1.18 (entorno Docker)
+   - nunomaduro/collision: ^7.0 (mejor visualización de errores)
+   - spatie/laravel-ignition: ^2.0 (página de errores mejorada)
+
+2.1.3 Herramientas de Build Backend
+   - Vite: ^4.0.0 (backend/package.json línea 10)
+   - Laravel Vite Plugin: ^0.7.2 (integración Vite con Laravel)
+   - Axios: ^1.1.2 (cliente HTTP JavaScript)
+
+2.2 FRAMEWORKS Y LIBRERÍAS FRONTEND
+------------------------------------
+
+2.2.1 Framework Principal: React 19
+   - Versión: ^19.1.1 (front/package.json línea 13)
+   - React DOM: ^19.1.1
+   - Tipo: Librería UI basada en componentes
+
+2.2.2 Dependencias Frontend Principales
+   
+   Routing:
+   - react-router-dom: ^7.9.4 (navegación SPA)
+   
+   Componentes UI:
+   - react-qr-code: ^2.0.18 (generación de códigos QR)
+   
+   Desarrollo:
+   - TypeScript: ~5.8.3 (tipado estático)
+   - @types/react: ^19.1.10
+   - @types/react-dom: ^19.1.7
+   - @types/node: ^24.7.1
+   
+   Linting:
+   - eslint: ^9.33.0
+   - @eslint/js: ^9.33.0
+   - eslint-plugin-react-hooks: ^5.2.0
+   - eslint-plugin-react-refresh: ^0.4.20
+   - typescript-eslint: ^8.39.1
+   - globals: ^16.3.0
+
+2.2.3 Herramientas de Build Frontend
+   - Vite: ^7.1.2 (bundler y dev server)
+   - @vitejs/plugin-react: ^5.0.0 (plugin React para Vite)
+   - TypeScript Compiler: ~5.8.3
+
+2.3 VERSIONES DETECTADAS
+-------------------------
+
+Backend (composer.json):
+- PHP: ^8.1
+- Laravel Framework: ^10.0
+- Laravel Sanctum: ^3.3
+- Guzzle: ^7.2
+- Doctrine DBAL: ^3.10
+- PHPUnit: ^10.0
+- Faker: ^1.9.1
+
+Frontend (package.json):
+- Node: Compatible con Vite 7.x (requiere Node 18+)
+- React: ^19.1.1
+- TypeScript: ~5.8.3
+- Vite: ^7.1.2
+- React Router: ^7.9.4
+- ESLint: ^9.33.0
+
+2.4 SERVICIOS Y APIS EXTERNAS
+------------------------------
+
+2.4.1 Evolution API (WhatsApp)
+   - URL Base: https://nexa-evolution-api.yyfvlz.easypanel.host
+   - Configuración: backend/config/services.php línea 34-36
+   - Propósito: Integración con WhatsApp Business API
+   - Autenticación: API Key en header 'apikey'
+   - Endpoints utilizados:
+     * /instance/connect/{instance}
+     * /instance/logout/{instance}
+     * /instance/status/{instance}
+     * /instance/connectionState/{instance}
+     * /chat/findContacts/{instance}
+     * /message/sendText/{instance}
+     * /message/sendMedia/{instance}
+
+2.4.2 CDN Externos
+   - Font Awesome: 6.4.0 (Login.tsx línea 254, mensajes.tsx línea 56)
+   - URL: https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css
+
+================================================================================
+3. ENCRIPTACIÓN Y MANEJO DE DATOS
+================================================================================
+
+3.1 ALGORITMOS DE CIFRADO UTILIZADOS
+-------------------------------------
+
+3.1.1 Bcrypt (Contraseñas)
+   - Algoritmo: bcrypt
+   - Configuración: backend/config/hashing.php línea 18
+   - Rounds: 10 (configurable via BCRYPT_ROUNDS)
+   - Implementación: Hash::make() facade
+   - Uso: Hasheo de contraseñas de usuario (AuthController.php línea 41)
+   - Características:
+     * Salt automático
+     * Resistente a ataques de fuerza bruta
+     * Incremento adaptativo de complejidad
+
+3.1.2 Encriptación de Cookies
+   - Middleware: EncryptCookies (Kernel.php línea 33)
+   - Algoritmo: AES-256-CBC (por defecto en Laravel)
+   - Clave: APP_KEY en archivo .env
+   - Cookies encriptadas:
+     * Cookie de sesión Laravel
+     * Cookies personalizadas del framework
+   - Excepciones: Cookies que no requieren encriptación pueden definirse
+
+3.1.3 Encriptación de Sesiones
+   - Habilitada: No (session.php línea 49, encrypt: false)
+   - Almacenamiento: Archivos en storage/framework/sessions
+   - 
+   RECOMENDACIÓN: Habilitar encriptación de sesión en producción
+
+3.2 UBICACIÓN Y USO DE CLAVES, ARCHIVOS .ENV, TOKENS O CREDENCIALES
+--------------------------------------------------------------------
+
+3.2.1 Archivo .env (No incluido en repositorio)
+   - Ubicación esperada: backend/.env
+   - Ejemplo: backend/.env.example
+   - Variables sensibles esperadas:
+     * APP_KEY: Clave de encriptación de la aplicación
+     * DB_PASSWORD: Contraseña de base de datos
+     * EVOLUTION_BASE_URL: URL de la API de WhatsApp
+     * SESSION_SECURE_COOKIE: Configuración de cookies seguras
+     * CORS_ALLOWED_ORIGINS: Orígenes permitidos para CORS
+   
+   - .gitignore: .env está excluido del repositorio ✓
+
+3.2.2 Credenciales WhatsApp
+   - Modelo: CredencialWhatsapp (backend/app/Models/CredencialWhatsapp.php)
+   - Almacenamiento: Base de datos MySQL
+   - Campos sensibles:
+     * instancia: Nombre de instancia WhatsApp
+     * apikey: Clave API para Evolution API
+   - Protección:
+     * No se exponen en respuestas API (makeHidden)
+     * Sanitización en sanitizeEvolutionPayload()
+     * Filtrado por user_id (un usuario solo ve sus credenciales)
+
+3.2.3 API Keys en Tránsito
+   - Evolution API: API key enviada en header 'apikey'
+   - Implementación: AuthController.php líneas 230-233, MessageController.php líneas 54-57
+   - Almacenamiento local: No se almacenan en localStorage/cookies del navegador
+   - 
+   RIESGO: API keys enviadas en headers HTTP plano (mitigado por HTTPS en producción)
+
+3.2.4 Tokens de Sesión
+   - Laravel Session Token: Almacenado en cookie encriptada
+   - XSRF-TOKEN: Cookie no encriptada (necesaria para lectura desde JavaScript)
+   - Regeneración: Automática en login/logout
+
+3.3 MÉTODOS DE HASH, SALTING Y ALMACENAMIENTO SEGURO
+-----------------------------------------------------
+
+3.3.1 Hashing de Contraseñas
+   - Método: Hash::make($password)
+   - Algoritmo: bcrypt
+   - Salt: Generado automáticamente por bcrypt
+   - Verificación: Hash::check($input, $hashed) o Auth::attempt()
+   - Almacenamiento: Campo 'password' en tabla users (tipo string, longitud suficiente para hash)
+
+3.3.2 Tokens CSRF
+   - Generación: Laravel automáticamente
+   - Almacenamiento: Cookie XSRF-TOKEN
+   - Validación: VerifyCsrfToken middleware
+   - Regeneración: En cada request
+
+3.3.3 Claves de Encriptación
+   - APP_KEY: Generada con php artisan key:generate
+   - Formato: base64:... (32 bytes aleatorios)
+   - Uso: Encriptación de cookies y datos sensibles
+   - 
+   CRÍTICO: APP_KEY debe ser única por entorno y nunca compartida
+
+3.3.4 Almacenamiento de Datos Sensibles
+   - Contraseñas: Hasheadas con bcrypt, nunca en texto plano
+   - API Keys WhatsApp: En base de datos, no expuestas en frontend
+   - Tokens de sesión: En archivos/storage con permisos restrictivos
+   - 
+   BUENA PRÁCTICA: makeHidden(['password']) en modelos User
+
+3.3.5 Limpieza de Datos Sensibles
+   - Función: sanitizeEvolutionPayload() (AuthController.php líneas 341-360)
+   - Elimina: apikey, apiKey, api_key, token, session, sessionToken
+   - Uso: Antes de enviar respuestas al frontend
+   - Estrategia: Arr::forget() para remover claves anidadas
+
+================================================================================
+4. COMUNICACIÓN Y CONSUMO DE SERVICIOS
+================================================================================
+
+4.1 ENDPOINTS EXTERNOS UTILIZADOS
+----------------------------------
+
+4.1.1 Evolution API (WhatsApp Business)
+   - URL Base: https://nexa-evolution-api.yyfvlz.easypanel.host
+   - Protocolo: HTTPS ✓
+   
+   Endpoints implementados:
+   
+   a) Gestión de Instancias:
+      - GET /instance/connect/{instance}
+        * Propósito: Conectar instancia WhatsApp
+        * Respuesta: QR code para vinculación
+        * Implementación: AuthController.php líneas 209-215
+      
+      - GET /instance/status/{instance}
+        * Propósito: Verificar estado de conexión
+        * Implementación: AuthController.php líneas 217-223
+      
+      - DELETE /instance/logout/{instance}
+        * Propósito: Cerrar sesión WhatsApp
+        * Implementación: AuthController.php líneas 113-117
+      
+      - GET /instance/connectionState/{instance}
+        * Propósito: Polling de estado de conexión
+        * Implementación: InstanceController.php
+        * Uso frontend: Login.tsx línea 357
+   
+   b) Gestión de Contactos:
+      - POST /chat/findContacts/{instance}
+        * Propósito: Buscar contactos WhatsApp
+        * Implementación: ContactController.php líneas 35-47
+      
+   c) Envío de Mensajes:
+      - POST /message/sendText/{instance}
+        * Propósito: Enviar mensajes de texto
+        * Implementación: MessageController.php líneas 37-59
+        * Payload: number, text, delay, linkPreview
+      
+      - POST /message/sendMedia/{instance}
+        * Propósito: Enviar archivos multimedia
+        * Implementación: MessageController.php líneas 115-140
+        * Payload: number, mediatype, mimetype, media, fileName, caption
+
+4.1.2 Laravel Sanctum CSRF
+   - URL: {API_BASE}/sanctum/csrf-cookie
+   - Propósito: Obtener cookie CSRF para autenticación
+   - Implementación frontend: Login.tsx línea 11, mensajes.tsx línea 36
+
+4.1.3 API Interna (Backend Laravel)
+   - Base URL: http://localhost:8000 (desarrollo)
+   - Configurable: VITE_API_BASE_URL
+   
+   Endpoints autenticados:
+   - POST /api/register - Registro de usuarios
+   - POST /api/login - Inicio de sesión
+   - POST /api/logout - Cierre de sesión
+   - GET /api/me - Datos del usuario actual
+   - GET /api/login/status - Estado WhatsApp
+   - POST /api/send-message - Envío de mensajes
+   - POST /api/send-media - Envío de multimedia
+   - GET /api/plantillas - Listar plantillas
+   - POST /api/plantillas - Crear plantilla
+   - PUT /api/plantillas/{id} - Actualizar plantilla
+   - DELETE /api/plantillas/{id} - Eliminar plantilla
+   - POST /api/find-contacts - Buscar contactos
+   - POST /api/filter-contacts - Filtrar contactos
+
+4.2 USO DE HTTPS, CERTIFICADOS O VALIDACIONES TLS
+--------------------------------------------------
+
+4.2.1 Evolution API
+   - Protocolo: HTTPS ✓
+   - URL: https://nexa-evolution-api.yyfvlz.easypanel.host
+   - Validación TLS: Por defecto en Guzzle HTTP client
+   - Timeout: 15 segundos (AuthController.php línea 233)
+   
+4.2.2 Backend Laravel
+   - Desarrollo: HTTP (localhost:8000)
+   - Producción: Debe configurarse HTTPS
+   - Cookie segura: SESSION_SECURE_COOKIE=true en producción
+   - 
+   RECOMENDACIÓN: Forzar HTTPS en producción con:
+   - Middleware TrustProxies configurado
+   - APP_URL con https://
+   - SESSION_SECURE_COOKIE=true
+
+4.2.3 Frontend
+   - Desarrollo: HTTP (localhost:5173)
+   - Credentials: 'include' en todos los fetch (AuthContext.tsx línea 22)
+   - CORS: Configurado para permitir requests con credenciales
+
+4.2.4 Validación de Certificados
+   - Guzzle: Valida certificados SSL por defecto
+   - Fetch API: Valida certificados SSL del navegador
+   - 
+   No se detectaron configuraciones que deshabiliten validación SSL ✓
+
+4.3 APIS PÚBLICAS O PRIVADAS IDENTIFICADAS
+-------------------------------------------
+
+4.3.1 APIs Privadas (Requieren Autenticación)
+   
+   Backend Laravel:
+   - Todas las rutas bajo middleware auth:sanctum
+   - Autenticación: Cookie de sesión Laravel
+   - CSRF: Token XSRF requerido
+   
+   Evolution API:
+   - Autenticación: API key en header 'apikey'
+   - Privada por instancia de usuario
+   - Un usuario solo accede a su propia instancia
+
+4.3.2 APIs Públicas
+   
+   Backend Laravel:
+   - POST /api/register - Registro (sin autenticación previa)
+   - POST /api/login - Login (sin autenticación previa)
+   - POST /usuarios/register - Registro alternativo
+   - POST /usuarios/login - Login alternativo
+
+4.3.3 Flujo de Comunicación
+
+   1. Frontend solicita CSRF cookie:
+      GET {API_BASE}/sanctum/csrf-cookie
+   
+   2. Frontend envía credenciales:
+      POST {API_BASE}/api/login
+      Headers: X-XSRF-TOKEN, Content-Type: application/json
+      Credentials: include
+   
+   3. Backend valida y crea sesión:
+      - Verifica CSRF token
+      - Autentica con Auth::attempt()
+      - Regenera sesión
+      - Consulta Evolution API para estado WhatsApp
+   
+   4. Backend responde con datos:
+      - Usuario (sin password)
+      - Credencial WhatsApp (sin apikey)
+      - Estado de conexión WhatsApp
+   
+   5. Frontend almacena datos:
+      - Usuario en AuthContext
+      - Metadata en localStorage
+   
+   6. Requests subsecuentes:
+      - Cookie de sesión automática
+      - XSRF token en header
+      - Credentials: include
+
+================================================================================
+5. ARQUITECTURA GENERAL
+================================================================================
+
+5.1 ESTRUCTURA DEL PROYECTO
+----------------------------
+
+5.1.1 Estructura de Directorios Principal
+
+CRM-Nexa/
+├── backend/                    # Aplicación Laravel (API Backend)
+│   ├── app/
+│   │   ├── Console/           # Comandos Artisan
+│   │   ├── Exceptions/        # Manejo de excepciones
+│   │   ├── Http/
+│   │   │   ├── Controllers/  # Controladores API
+│   │   │   ├── Middleware/   # Middleware HTTP
+│   │   │   └── Kernel.php    # Configuración HTTP
+│   │   ├── Models/           # Modelos Eloquent
+│   │   └── Providers/        # Service Providers
+│   ├── bootstrap/            # Inicialización Laravel
+│   ├── config/               # Archivos de configuración
+│   ├── database/
+│   │   ├── migrations/       # Migraciones de BD
+│   │   ├── seeders/          # Seeders de datos
+│   │   └── factories/        # Factories para testing
+│   ├── public/               # Punto de entrada web
+│   ├── resources/
+│   │   ├── js/              # Assets JavaScript
+│   │   └── views/           # Vistas Blade (mínimo uso)
+│   ├── routes/
+│   │   ├── api.php          # Rutas de API
+│   │   ├── web.php          # Rutas web
+│   │   ├── channels.php     # Broadcasting
+│   │   └── console.php      # Comandos consola
+│   ├── storage/             # Archivos generados
+│   ├── tests/               # Tests PHPUnit
+│   ├── .env.example         # Template de configuración
+│   ├── composer.json        # Dependencias PHP
+│   └── artisan              # CLI de Laravel
+│
+├── front/                     # Aplicación React (Frontend SPA)
+│   ├── public/               # Assets estáticos
+│   ├── src/
+│   │   ├── auth/            # Contexto y guards de autenticación
+│   │   │   ├── AuthContext.tsx
+│   │   │   ├── RequireAuth.tsx
+│   │   │   └── RedirectIfAuthenticated.tsx
+│   │   ├── contacts/        # Módulo de contactos
+│   │   │   ├── Contacts.tsx
+│   │   │   ├── types.ts
+│   │   │   └── modules/     # Submódulos de contactos
+│   │   ├── Inicio/          # Dashboard principal
+│   │   │   ├── index.tsx
+│   │   │   └── HomeDashboard.tsx
+│   │   ├── login/           # Módulo de login
+│   │   │   ├── Login.tsx
+│   │   │   └── login.css
+│   │   ├── mensajes/        # Módulo de mensajería
+│   │   │   ├── mensajes.tsx
+│   │   │   ├── mensajes.css
+│   │   │   ├── templateHistory.tsx
+│   │   │   ├── templateHistory.ts
+│   │   │   └── templateTypes.ts
+│   │   ├── App.tsx          # Componente raíz y rutas
+│   │   ├── main.tsx         # Punto de entrada
+│   │   └── vite-env.d.ts    # Tipos Vite
+│   ├── index.html           # HTML principal
+│   ├── package.json         # Dependencias Node
+│   ├── tsconfig.json        # Configuración TypeScript
+│   ├── vite.config.ts       # Configuración Vite
+│   └── eslint.config.js     # Configuración ESLint
+│
+└── (archivos raíz)
+
+5.1.2 Separación Frontend/Backend
+   - Backend: API RESTful stateless (excepto sesiones)
+   - Frontend: SPA React independiente
+   - Comunicación: JSON sobre HTTP/HTTPS
+   - Desarrollo: Dos servidores separados (Vite:5173, Laravel:8000)
+   - Producción: Frontend servido como assets estáticos, API en subdominio/path
+
+5.2 PATRONES DETECTADOS
+------------------------
+
+5.2.1 Patrón MVC (Model-View-Controller) - Backend
+   
+   Models (app/Models/):
+   - User.php: Modelo de usuarios
+   - CredencialWhatsapp.php: Credenciales WhatsApp
+   - Plantilla.php: Plantillas de mensajes
+   - Usuario.php: Modelo alternativo de usuario
+   
+   Controllers (app/Http/Controllers/):
+   - AuthController.php: Autenticación y sesiones
+   - ContactController.php: Gestión de contactos WhatsApp
+   - MessageController.php: Envío de mensajes
+   - PlantillaController.php: CRUD de plantillas
+   - CredencialWhatsappController.php: Gestión de credenciales
+   - InstanceController.php: Estado de instancias WhatsApp
+   - UsuarioController.php: Gestión alternativa de usuarios
+   
+   Views:
+   - Mínimas (Laravel usado principalmente como API)
+   - resources/views/welcome.blade.php
+
+5.2.2 Patrón Repository (Implícito con Eloquent)
+   - Eloquent ORM actúa como repository pattern
+   - Ejemplos:
+     * CredencialWhatsapp::where('user_id', $user->id)->first()
+     * Plantilla::create(...), Plantilla::find($id)
+   - Abstracción de acceso a datos
+
+5.2.3 Patrón Service Layer (Parcial)
+   - performEvolutionRequest(): Abstrae comunicación con Evolution API
+   - buildWhatsappPayload(): Normaliza respuestas de API
+   - sanitizeEvolutionPayload(): Limpia datos sensibles
+   - Implementados como métodos protegidos en AuthController
+
+5.2.4 Patrón Middleware (Chain of Responsibility)
+   - Stack de middleware global (Kernel.php líneas 16-24)
+   - Middleware groups (web, api)
+   - Middleware aliases
+   - Ejecución secuencial antes/después de request
+
+5.2.5 Context Pattern - Frontend
+   - AuthContext.tsx: Gestión global de autenticación
+   - Proveedor: AuthProvider
+   - Hook: useAuthContext()
+   - Estado compartido: status, user, refresh, markAuthenticated, markLoggedOut
+
+5.2.6 Higher-Order Components / Render Props
+   - RequireAuth: Protege rutas autenticadas
+   - RedirectIfAuthenticated: Redirige usuarios ya autenticados
+   - Implementación: Wrapper components con lógica de autorización
+
+5.2.7 Custom Hooks Pattern
+   - useTemplateManager: Gestión de plantillas (templateHistory.tsx)
+   - useCampaignHistory: Historial de campañas
+   - useAuthContext: Acceso a contexto de autenticación
+
+5.2.8 Component-Based Architecture
+   - Componentes modulares por funcionalidad:
+     * Login.tsx
+     * Contacts.tsx
+     * Mensajes.tsx
+     * HomeDashboard.tsx
+   - Submódulos en carpetas:
+     * contacts/modules/: GruposModule, ContactosModule, TodosModule
+
+5.3 FLUJO GENERAL DE DATOS
+---------------------------
+
+5.3.1 Flujo de Autenticación
+
+   1. Carga inicial:
+      - Frontend: AuthProvider monta
+      - Llama refresh() (AuthContext.tsx línea 63)
+      - Intenta GET /api/me
+      - Si falla: status='unauthenticated'
+      - Si exitoso: status='authenticated', almacena user
+   
+   2. Login usuario:
+      - Usuario ingresa email/password en Login.tsx
+      - Frontend: ensureCsrfCookie() (línea 429)
+      - Frontend: POST /api/login con credenciales
+      - Backend: AuthController::login()
+        * Valida credenciales con Auth::attempt()
+        * Regenera sesión
+        * Consulta CredencialWhatsapp del usuario
+        * Llama Evolution API (connect + status)
+        * Sanitiza respuesta
+        * Retorna usuario + credencial + whatsapp_session
+      - Frontend: markAuthenticated(user)
+      - Frontend: Guarda metadata en localStorage
+      - Frontend: Muestra QR si WhatsApp no conectado
+   
+   3. Vinculación WhatsApp:
+      - Usuario escanea QR
+      - Frontend: Polling cada 5s a /api/instance/connectionState
+      - Backend: Consulta Evolution API
+      - Cuando state='CONNECTED': redirect a /home-dashboard
+   
+   4. Requests subsecuentes:
+      - Frontend: Cookie de sesión enviada automáticamente
+      - Frontend: XSRF token en header
+      - Backend: Middleware auth:sanctum valida sesión
+      - Backend: $request->user() obtiene usuario autenticado
+
+5.3.2 Flujo de Envío de Mensajes
+
+   1. Usuario en /mensajes:
+      - Ingresa números y mensaje
+      - Selecciona plantilla (opcional)
+      - Click "Enviar"
+   
+   2. Frontend prepara request:
+      - ensureCsrfCookie()
+      - POST /api/send-message
+      - Body: { numeros: [...], mensaje: "..." }
+      - Headers: X-XSRF-TOKEN, Content-Type, Accept
+      - Credentials: include
+   
+   3. Backend procesa:
+      - MessageController::sendMessage()
+      - Valida entrada (numeros, mensaje)
+      - Obtiene $user = $request->user()
+      - Consulta CredencialWhatsapp
+      - Por cada número:
+        * Guzzle POST a Evolution API /message/sendText/{instance}
+        * Header apikey: {credencial->apikey}
+        * Body: { number, text, delay, linkPreview }
+        * Captura respuesta o error
+      - Retorna array de resultados
+   
+   4. Frontend muestra resultados:
+      - Lista de mensajes enviados
+      - Estado por número (SUCCESS/ERROR)
+      - Mensaje de confirmación
+
+5.3.3 Flujo de Gestión de Contactos
+
+   1. Frontend: POST /api/find-contacts o /api/filter-contacts
+   2. Backend: ContactController
+      - Obtiene credencial del usuario
+      - Guzzle POST a Evolution API /chat/findContacts/{instance}
+      - Opcionalmente filtra por country_code, area_codes
+      - Retorna lista de contactos
+   3. Frontend: Muestra contactos en módulos (Todos, Grupos, Contactos)
+
+5.3.4 Flujo de Gestión de Plantillas
+
+   1. Listar: GET /api/plantillas
+      - PlantillaController::index()
+      - Plantilla::where('user_id', $usuario->id)->get()
+      - Retorna plantillas del usuario
+   
+   2. Crear: POST /api/plantillas
+      - Validación: name, type, payload
+      - validatePayload() según tipo (texto/media)
+      - Plantilla::create() con UUID
+      - Retorna plantilla creada
+   
+   3. Actualizar: PUT /api/plantillas/{id}
+      - Verifica ownership (user_id)
+      - Valida cambios
+      - update() en modelo
+   
+   4. Eliminar: DELETE /api/plantillas/{id}
+      - Verifica ownership
+      - delete() en modelo
+
+5.3.5 Diagrama de Capas
+
+   ┌─────────────────────────────────────────────┐
+   │           Frontend (React SPA)              │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  UI Components (tsx)                │   │
+   │  │  - Login, Mensajes, Contacts, etc.  │   │
+   │  └─────────────────────────────────────┘   │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  Contexts & Hooks                   │   │
+   │  │  - AuthContext, useTemplateManager  │   │
+   │  └─────────────────────────────────────┘   │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  API Client (fetch)                 │   │
+   │  │  - Credentials, XSRF tokens         │   │
+   │  └─────────────────────────────────────┘   │
+   └─────────────────────────────────────────────┘
+                      │ HTTPS/JSON
+                      ↓
+   ┌─────────────────────────────────────────────┐
+   │         Backend (Laravel API)               │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  HTTP Middleware Stack              │   │
+   │  │  - CORS, Auth, CSRF, Throttle       │   │
+   │  └─────────────────────────────────────┘   │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  Controllers                        │   │
+   │  │  - Auth, Message, Plantilla, etc.   │   │
+   │  └─────────────────────────────────────┘   │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  Models (Eloquent ORM)              │   │
+   │  │  - User, Plantilla, Credencial      │   │
+   │  └─────────────────────────────────────┘   │
+   │  ┌─────────────────────────────────────┐   │
+   │  │  External API Client (Guzzle)       │   │
+   │  └─────────────────────────────────────┘   │
+   └─────────────────────────────────────────────┘
+          │ MySQL                    │ HTTPS
+          ↓                          ↓
+   ┌──────────────┐      ┌─────────────────────┐
+   │   Database   │      │   Evolution API     │
+   │   (MySQL)    │      │   (WhatsApp)        │
+   └──────────────┘      └─────────────────────┘
+
+================================================================================
+6. POSIBLES RIESGOS O MALAS PRÁCTICAS
+================================================================================
+
+6.1 DEPENDENCIAS OBSOLETAS O VULNERABLES
+-----------------------------------------
+
+6.1.1 Estado de Dependencias Backend
+   
+   Laravel Framework:
+   - Laravel 10: Lanzado en 2023, soporte hasta Feb 2024 (bug fixes)
+   - Estado: Versión estable pero no la más reciente (Laravel 11 disponible)
+   - RECOMENDACIÓN: Considerar migración a Laravel 11 para soporte extendido
+   
+   PHP:
+   - Requerido: ^8.1
+   - PHP 8.1: Soporte de seguridad hasta Nov 2024
+   - RECOMENDACIÓN: Migrar a PHP 8.2 o 8.3 para soporte extendido
+   
+   Otras dependencias:
+   - Sanctum 3.3: Actualizada ✓
+   - Guzzle 7.2: Versión estable ✓
+   - PHPUnit 10: Versión actual ✓
+   
+   ACCIÓN REQUERIDA:
+   - Ejecutar: composer audit
+   - Verificar CVEs en packagist.org
+   - Actualizar packages con vulnerabilidades conocidas
+
+6.1.2 Estado de Dependencias Frontend
+   
+   React:
+   - Versión 19.1.1: Muy reciente (React 19 liberado en Dic 2024)
+   - Estado: Potencialmente inestable por ser nueva major version
+   - ATENCIÓN: Verificar compatibilidad con librerías existentes
+   
+   Vite:
+   - Versión 7.1.2: Actualizado ✓
+   
+   React Router:
+   - Versión 7.9.4: Actualizado ✓
+   
+   TypeScript:
+   - Versión 5.8.3: Actualizado ✓
+   
+   ACCIÓN REQUERIDA:
+   - Ejecutar: npm audit
+   - Revisar issues de React 19 con librerías de terceros
+   - Verificar breaking changes en ecosistema React
+
+6.2 ARCHIVOS INSEGUROS O CLAVES EXPUESTAS
+------------------------------------------
+
+6.2.1 Claves en Código Fuente
+
+   CRÍTICO - URL de Evolution API hardcoded:
+   - Ubicaciones:
+     * AuthController.php línea 19
+     * MessageController.php líneas 37, 115
+     * ContactController.php líneas 35, 100
+   - Valor: https://nexa-evolution-api.yyfvlz.easypanel.host
+   - Problema: URL hardcoded en código, no configurable por entorno
+   - Estado: Mitigado parcialmente en config/services.php pero no usado consistentemente
+   - SOLUCIÓN: Usar config('services.evolution.base_url') en todos los controllers
+
+   API Keys WhatsApp:
+   - Estado: No expuestas en código ✓
+   - Almacenadas: Base de datos
+   - Protegidas: makeHidden(), sanitizeEvolutionPayload()
+   - Riesgo: Medio (depende de seguridad de BD)
+
+6.2.2 Archivos Sensibles en Repositorio
+   
+   .env:
+   - Estado: Correctamente excluido en .gitignore ✓
+   
+   .env.example:
+   - Estado: Presente (esperado) ✓
+   - Contenido: Valores de ejemplo sin credenciales reales ✓
+   
+   Logs:
+   - Estado: storage/ excluido en .gitignore ✓
+   
+   Sesiones:
+   - Estado: storage/framework/sessions en .gitignore ✓
+
+6.2.3 Información en localStorage
+   - Datos almacenados:
+     * user_id
+     * instance
+     * nombres
+   - Riesgo: Bajo (información no crítica)
+   - Vulnerabilidad: XSS podría leer localStorage
+   - Mitigación: HttpOnly cookies para tokens sensibles ✓
+
+6.3 CONFIGURACIONES RIESGOSAS
+------------------------------
+
+6.3.1 Debug Mode en Producción
+   - Configuración: APP_DEBUG en .env
+   - .env.example: APP_DEBUG=true (desarrollo)
+   - RIESGO CRÍTICO: Si APP_DEBUG=true en producción:
+     * Exposición de stack traces
+     * Revelación de rutas de archivos
+     * Información de configuración sensible
+   - SOLUCIÓN: APP_DEBUG=false en producción
+
+6.3.2 CORS Permisivo
+   - allowed_methods: ['*'] (cors.php línea 20)
+   - allowed_headers: ['*'] (cors.php línea 26)
+   - RIESGO: Medio
+   - Mitigación: allowed_origins limitado a lista específica ✓
+   - RECOMENDACIÓN: Limitar métodos a ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+
+6.3.3 Session Encryption Deshabilitada
+   - Configuración: 'encrypt' => false (session.php línea 49)
+   - RIESGO: Datos de sesión en texto plano en storage
+   - RECOMENDACIÓN: 'encrypt' => true en producción
+
+6.3.4 Cookies sin Secure Flag
+   - SESSION_SECURE_COOKIE: No definido en .env.example
+   - Por defecto: null (inseguro en producción)
+   - RIESGO: Cookies enviadas sobre HTTP
+   - SOLUCIÓN: SESSION_SECURE_COOKIE=true en producción con HTTPS
+
+6.3.5 Falta de Headers de Seguridad
+   - Content-Security-Policy: No configurado
+   - X-Frame-Options: No configurado explícitamente
+   - X-Content-Type-Options: No configurado
+   - Strict-Transport-Security: No configurado
+   - RECOMENDACIÓN: Agregar middleware para headers de seguridad
+
+6.3.6 Rate Limiting Genérico
+   - Configuración: ':api' (usa defaults de Laravel)
+   - Límite por defecto: 60 requests/minuto
+   - RIESGO: Posible abuso en endpoints críticos (login, envío masivo)
+   - RECOMENDACIÓN: Rate limiting específico para:
+     * Login: 5 intentos/minuto
+     * Registro: 3 intentos/minuto
+     * Envío mensajes: según plan del usuario
+
+6.4 VALIDACIONES INSUFICIENTES
+-------------------------------
+
+6.4.1 Validación de Contraseñas
+   - Longitud mínima: 6 caracteres (AuthController.php línea 30)
+   - RIESGO: Contraseñas débiles
+   - Falta:
+     * Validación de complejidad
+     * Verificación contra diccionarios comunes
+     * Historial de contraseñas
+   - RECOMENDACIÓN: Mínimo 8 caracteres, reglas de complejidad
+
+6.4.2 Validación de Números de Teléfono
+   - MessageController: No valida formato de números
+   - RIESGO: Envío a números inválidos, costos innecesarios
+   - RECOMENDACIÓN: Validación de formato internacional
+
+6.4.3 Validación de Tamaño de Archivos
+   - sendMedia: No valida tamaño de media base64
+   - RIESGO: DoS con archivos enormes
+   - RECOMENDACIÓN: Límite de tamaño de payload
+
+6.4.4 Sanitización de Input
+   - TrimStrings middleware: Básico ✓
+   - FALTA:
+     * Validación de HTML en campos de texto
+     * Sanitización de nombres de archivo
+     * Validación de URLs en media
+
+6.5 GESTIÓN DE ERRORES Y LOGGING
+---------------------------------
+
+6.5.1 Exposición de Errores
+   - Debug mode: Expone stack traces completos
+   - Mensajes de error: Algunos revelan estructura interna
+   - RECOMENDACIÓN: Mensajes genéricos en producción
+
+6.5.2 Logging de Información Sensible
+   - No se detectó logging explícito de passwords ✓
+   - RIESGO: Logs podrían contener API keys en requests
+   - RECOMENDACIÓN: Revisar configuración de logging, redactar datos sensibles
+
+6.5.3 Manejo de Excepciones
+   - Try-catch genérico: Captura \Exception (muy amplio)
+   - RECOMENDACIÓN: Excepciones específicas, logging estructurado
+
+6.6 SEGURIDAD DE THIRD-PARTY APIs
+----------------------------------
+
+6.6.1 Evolution API
+   - Autenticación: Solo API key (sin rotación aparente)
+   - RIESGO: API key comprometida = acceso total
+   - RECOMENDACIÓN:
+     * Rotación periódica de API keys
+     * Monitoreo de uso de API
+     * Rate limiting en cliente
+
+6.6.2 Validación de Respuestas
+   - Validación mínima de respuestas de Evolution API
+   - RIESGO: Respuestas malformadas podrían causar errores
+   - RECOMENDACIÓN: Validación estricta de estructura de respuesta
+
+6.7 ARQUITECTURA Y DISEÑO
+--------------------------
+
+6.7.1 Separación de Concerns
+   - AuthController: Demasiadas responsabilidades (482 líneas)
+     * Autenticación
+     * Integración WhatsApp
+     * Sanitización
+   - RECOMENDACIÓN: Extraer servicio para Evolution API
+
+6.7.2 Código Duplicado
+   - URL de Evolution API repetida en múltiples controllers
+   - Lógica de obtención de credenciales duplicada
+   - RECOMENDACIÓN: Service class compartido
+
+6.7.3 Testing
+   - No se detectan tests implementados en backend/tests
+   - No se detecta configuración de tests en frontend
+   - RIESGO: Cambios sin validación automatizada
+   - RECOMENDACIÓN: Implementar test suite (unitarios, integración)
+
+6.8 RESUMEN DE RIESGOS PRIORIZADOS
+-----------------------------------
+
+🔴 CRÍTICOS (Acción Inmediata):
+1. APP_DEBUG=true en producción → Exposición de información sensible
+2. URLs hardcoded en código → Dificultad de configuración por entorno
+3. SESSION_SECURE_COOKIE no configurado → Cookies inseguras en producción
+4. Falta de headers de seguridad → Vulnerabilidades XSS/Clickjacking
+
+🟠 ALTOS (Acción Pronta):
+5. Session encryption deshabilitada → Datos de sesión legibles
+6. Contraseñas débiles permitidas (6 chars) → Fuerza bruta facilitada
+7. Falta de rate limiting específico → Abuso de endpoints
+8. CORS permisivo (métodos/headers *) → Potencial abuso
+
+🟡 MEDIOS (Planificar):
+9. Laravel 10 sin soporte extendido → Falta de parches de seguridad futuros
+10. React 19 muy nuevo → Posibles bugs no descubiertos
+11. Falta de validación de tamaño de archivos → DoS
+12. Falta de tests automatizados → Regresiones no detectadas
+
+🟢 BAJOS (Mejora Continua):
+13. Código duplicado → Mantenibilidad
+14. AuthController muy grande → Complejidad
+15. Información en localStorage → XSS leve
+16. Validación de números de teléfono → UX
+
+================================================================================
+                           FIN DEL ANÁLISIS
+================================================================================
+
+Este análisis ha sido generado mediante revisión exhaustiva del código fuente,
+configuraciones, dependencias y arquitectura del proyecto CRM-Nexa.
+
+Todas las observaciones están basadas en el estado actual del código en el
+repositorio y las mejores prácticas de seguridad de la industria.
+
+Se recomienda:
+1. Revisar y abordar los riesgos críticos antes de deployment en producción
+2. Implementar un proceso de auditoría de seguridad continua
+3. Mantener dependencias actualizadas con composer update / npm update
+4. Implementar suite de tests automatizados
+5. Configurar CI/CD con verificaciones de seguridad automáticas
+
+Para más información sobre las recomendaciones específicas, consultar
+documentación de Laravel Security, OWASP Top 10, y React Security Best Practices.
