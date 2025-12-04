@@ -6,6 +6,8 @@ import ContactosModule, { filterIndividualContacts } from './modules/ContactosMo
 import GruposModule, { filterGroups } from './modules/GruposModule'
 import type { ContactsModuleProps } from './modules/ContactModuleBase'
 import type { Contact, FilterResponse, FilterTotals, FilterType, LoadingMode } from './types'
+import { API_BASE } from '../config/api'
+import { safeStorage } from '../utils/safeStorage'
 
 function ensureStylesLoaded() {
   const cdnLinks = [
@@ -30,7 +32,6 @@ function ensureStylesLoaded() {
   }
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
 
 const getXsrfToken = (): string | null => {
@@ -74,8 +75,7 @@ const FILTER_FUNCTIONS: Record<FilterType, (contacts: Contact[]) => Contact[]> =
 }
 
 const getStoredUserId = (): string | null => {
-  if (typeof window === 'undefined' || !window.localStorage) return null
-  const raw = window.localStorage.getItem('user_id')
+  const raw = safeStorage.get('user_id')
   if (!raw) return null
   const trimmed = raw.trim()
   return trimmed.length > 0 ? trimmed : null

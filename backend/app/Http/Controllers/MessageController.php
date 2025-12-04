@@ -8,10 +8,18 @@ use App\Models\CredencialWhatsapp;
 
 class MessageController extends Controller
 {
+    protected string $evolutionBaseUrl;
+
+    public function __construct()
+    {
+        $this->evolutionBaseUrl = rtrim(config('services.evolution.base_url'), '/');
+    }
+
     public function sendMessage(Request $request)
     {
         $request->validate([
             'numeros' => 'required|array',
+            'numeros.*' => ['required', 'string', 'regex:/^\+?\d{8,15}$/'],
             'mensaje' => 'required|string',
         ]);
 
@@ -34,7 +42,7 @@ class MessageController extends Controller
 
         $instanceName = $credencial->instancia;
         $apiKey = $credencial->apikey;
-        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendText/{$instanceName}";
+        $apiUrl = sprintf('%s/message/sendText/%s', $this->evolutionBaseUrl, $instanceName);
 
         $numeros = $request->numeros;
         $mensaje = $request->mensaje;
@@ -84,9 +92,11 @@ class MessageController extends Controller
     {
         $request->validate([
             'numeros' => 'required|array',
+            'numeros.*' => ['required', 'string', 'regex:/^\+?\d{8,15}$/'],
             'mediatype' => 'required|string',   // image, video, document
             'mimetype' => 'required|string',    // ejemplo: image/png
-            'media' => 'required|string',       // URL o base64
+            'media' => 'required_without:media_file|string|nullable',
+            'media_file' => 'required_without:media|file|max:5120', // 5MB
             'fileName' => 'required|string',
             'caption' => 'nullable|string',
             'delay' => 'nullable|integer',
@@ -112,18 +122,24 @@ class MessageController extends Controller
 
         $instanceName = $credencial->instancia;
         $apiKey = $credencial->apikey;
-        $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/message/sendMedia/{$instanceName}";
+        $apiUrl = sprintf('%s/message/sendMedia/%s', $this->evolutionBaseUrl, $instanceName);
 
         $numeros = $request->numeros;
         $client = new Client();
         $resultados = [];
+
+        $mediaPayload = $request->media;
+
+        if (! $mediaPayload && $request->hasFile('media_file')) {
+            $mediaPayload = base64_encode(file_get_contents($request->file('media_file')->getRealPath()));
+        }
 
         foreach ($numeros as $numero) {
             $data = [
                 'number' => $numero,
                 'mediatype' => $request->mediatype,
                 'mimetype' => $request->mimetype,
-                'media' => $request->media,
+                'media' => $mediaPayload,
                 'fileName' => $request->fileName,
                 'caption' => $request->caption ?? '',
                 'delay' => $request->delay ?? 0,

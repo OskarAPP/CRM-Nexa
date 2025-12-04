@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Models\CredencialWhatsapp;
@@ -14,7 +15,7 @@ class CredencialWhatsappController extends Controller
         $user = $request->user();
 
         if (! $user) {
-            abort(response()->json([
+            throw new HttpResponseException(response()->json([
                 'success' => false,
                 'message' => 'Usuario no autenticado'
             ], 401));
@@ -28,7 +29,7 @@ class CredencialWhatsappController extends Controller
         $user = $this->userOrFail($request);
 
         if ((int) $credencial->user_id !== (int) $user->id) {
-            abort(response()->json([
+            throw new HttpResponseException(response()->json([
                 'success' => false,
                 'message' => 'No tienes permisos para esta credencial'
             ], 403));

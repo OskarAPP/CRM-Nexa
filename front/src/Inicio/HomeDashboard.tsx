@@ -9,8 +9,9 @@ import {
   type MessageTemplate,
 } from '../mensajes/templateHistory'
 import { useAuthContext } from '../auth/AuthContext'
+import { API_BASE } from '../config/api'
+import { safeStorage } from '../utils/safeStorage'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
 
 type SessionSnapshot = {
@@ -74,16 +75,10 @@ const ensureCsrfCookie = async (): Promise<void> => {
 }
 
 const readSessionFromStorage = (): SessionSnapshot => {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    return DEFAULT_SESSION
-  }
-
   try {
-    const storage = window.localStorage
-
     const pickValue = (keys: ReadonlyArray<string>) => {
       for (const key of keys) {
-        const value = sanitizeValue(storage.getItem(key))
+        const value = sanitizeValue(safeStorage.get(key))
         if (value) {
           return value
         }
@@ -97,7 +92,7 @@ const readSessionFromStorage = (): SessionSnapshot => {
       userId: pickValue(STORAGE_FIELD_KEYS.userId),
     }
   } catch (error) {
-    console.warn('No se pudo leer la sesión guardada en localStorage', error)
+    console.warn('No se pudo leer la sesión guardada en el almacenamiento del navegador', error)
     return DEFAULT_SESSION
   }
 }
@@ -334,10 +329,7 @@ export default function HomeDashboard() {
         return
       }
 
-      if (typeof window !== 'undefined' && window.localStorage) {
-        const storage = window.localStorage
-        STORAGE_KEYS_SET.forEach((key) => storage.removeItem(key))
-      }
+      STORAGE_KEYS_SET.forEach((key) => safeStorage.remove(key))
 
       setSession({ ...DEFAULT_SESSION })
       markLoggedOut()

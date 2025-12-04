@@ -9,8 +9,15 @@ use App\Http\Controllers\MessageController;
 use App\Http\Controllers\PlantillaController;
 use App\Http\Controllers\UsuarioController;
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::middleware(['web'])->group(function () {
+    Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:register');
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
+
+    Route::prefix('usuarios')->group(function () {
+        Route::post('/register', [UsuarioController::class, 'register'])->middleware('throttle:register');
+        Route::post('/login', [UsuarioController::class, 'login'])->middleware('throttle:login');
+    });
+});
 
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -21,10 +28,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/perfil', [AuthController::class, 'perfil']); // ejemplo
 
     
-    Route::post('/find-contacts', [ContactController::class, 'findContacts']);
-    Route::post('/filter-contacts', [ContactController::class, 'filterContacts']);
-    Route::post('/send-message', [MessageController::class, 'sendMessage']);
-    Route::post('/send-media', [MessageController::class, 'sendMedia']);
+    Route::post('/find-contacts', [ContactController::class, 'findContacts'])->middleware('throttle:messaging');
+    Route::post('/filter-contacts', [ContactController::class, 'filterContacts'])->middleware('throttle:messaging');
+    Route::post('/send-message', [MessageController::class, 'sendMessage'])->middleware('throttle:messaging');
+    Route::post('/send-media', [MessageController::class, 'sendMedia'])->middleware('throttle:messaging');
 
     Route::get('/plantillas', [PlantillaController::class, 'index']);
     Route::get('/plantillas/{id}', [PlantillaController::class, 'show']);
@@ -41,7 +48,4 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
 });
 
-Route::prefix('usuarios')->group(function () {
-    Route::post('/register', [UsuarioController::class, 'register']);
-    Route::post('/login', [UsuarioController::class, 'login']);
-});
+

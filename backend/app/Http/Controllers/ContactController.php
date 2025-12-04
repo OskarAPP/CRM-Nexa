@@ -8,6 +8,13 @@ use Illuminate\Http\Request;
 
 class ContactController extends Controller
 {
+    protected string $evolutionBaseUrl;
+
+    public function __construct()
+    {
+        $this->evolutionBaseUrl = rtrim(config('services.evolution.base_url'), '/');
+    }
+
             public function findContacts(Request $request)
         {
             try {
@@ -32,7 +39,7 @@ class ContactController extends Controller
                 // ✅ Extraer los valores desde la BD
                 $instanceName = $credencial->instancia;
                 $apiKey = $credencial->apikey;
-                $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
+                $apiUrl = sprintf('%s/chat/findContacts/%s', $this->evolutionBaseUrl, $instanceName);
 
                 // ✅ Consumir la API externa con Guzzle
                 $client = new Client();
@@ -97,7 +104,7 @@ class ContactController extends Controller
                 // ✅ Extraer los valores desde la BD
                 $instanceName = $credencial->instancia;
                 $apiKey = $credencial->apikey;
-                $apiUrl = "https://nexa-evolution-api.yyfvlz.easypanel.host/chat/findContacts/{$instanceName}";
+                $apiUrl = sprintf('%s/chat/findContacts/%s', $this->evolutionBaseUrl, $instanceName);
 
                 // ✅ Tomar filtros desde la solicitud
                 $country = $request->input('country_code', '521'); // México por defecto

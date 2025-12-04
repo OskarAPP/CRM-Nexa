@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './login.css'
 import { useAuthContext } from '../auth/AuthContext'
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
+import { API_BASE } from '../config/api'
+import { safeStorage } from '../utils/safeStorage'
 const SERVER_BASE = API_BASE.replace(/\/$/, '')
 
 async function ensureCsrfCookie(): Promise<void> {
@@ -189,7 +189,7 @@ function extractConnectionState(payload: unknown): string | null {
 }
 
 function persistAuthSnapshot(payload: LoginSuccessPayload) {
-  if (typeof window === 'undefined' || !window.localStorage || !payload) return
+  if (!payload) return
 
   const entries: Array<[string, string]> = []
   const user = payload.user ?? null
@@ -222,10 +222,10 @@ function persistAuthSnapshot(payload: LoginSuccessPayload) {
 
   try {
     for (const [key, value] of entries) {
-      window.localStorage.setItem(key, value)
+      safeStorage.set(key, value)
     }
   } catch (error) {
-    console.error('No se pudo guardar la sesión en localStorage', error)
+    console.error('No se pudo guardar la sesión del usuario', error)
   }
 }
 
@@ -292,23 +292,16 @@ export default function Login() {
     }
 
     const payloadInstance = extractInstanceIdentifier(lastLoginPayload)
-    if (payloadInstance && typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('instance', payloadInstance)
-      window.localStorage.setItem('instancia', payloadInstance)
+    if (payloadInstance) {
+      safeStorage.set('instance', payloadInstance)
+      safeStorage.set('instancia', payloadInstance)
     }
 
-    const storedInstance =
-      payloadInstance ??
-      (typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem('instance') ?? window.localStorage.getItem('instancia')
-        : null)
+    const storedInstance = payloadInstance ?? safeStorage.get('instance') ?? safeStorage.get('instancia')
 
     const normalizedInstance = storedInstance?.trim() || null
 
-    const storedUserId =
-      typeof window !== 'undefined' && window.localStorage
-        ? window.localStorage.getItem('user_id')
-        : null
+    const storedUserId = safeStorage.get('user_id')
 
     const normalizedUserId = storedUserId?.trim() || null
 
@@ -386,10 +379,8 @@ export default function Login() {
 
           if (discoveredInstance) {
             pollingInstance = discoveredInstance
-            if (typeof window !== 'undefined' && window.localStorage) {
-              window.localStorage.setItem('instance', discoveredInstance)
-              window.localStorage.setItem('instancia', discoveredInstance)
-            }
+            safeStorage.set('instance', discoveredInstance)
+            safeStorage.set('instancia', discoveredInstance)
           }
         }
 

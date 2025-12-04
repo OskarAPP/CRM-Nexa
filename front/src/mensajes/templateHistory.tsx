@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Dispatch, FormEvent, ReactNode, SetStateAction } from 'react'
+import { API_BASE } from '../config/api'
 import type {
   MediaTemplate,
   MediaType,
@@ -50,7 +51,7 @@ export interface TemplateStatus {
 const TEMPLATE_STATUS_TIMEOUT = 4000
 const MAX_MEDIA_TEMPLATE_SIZE_KB = 15360 // ~15 MB, considering base64 overhead
 const DEFAULT_HISTORY_PLACEHOLDER = '// Los resultados de sus envíos aparecerán aquí'
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+const API_BASE_URL = API_BASE
 const API_TEMPLATES_PATH = '/api/plantillas'
 const CSRF_ENDPOINT = `${API_BASE_URL}/sanctum/csrf-cookie`
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])

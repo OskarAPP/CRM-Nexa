@@ -149,6 +149,8 @@ class UsuarioController extends AuthController
         $emailRule = $isCreate ? 'required' : 'sometimes';
         $passwordRule = $isCreate ? 'required' : 'nullable';
 
+        $passwordRules = [$passwordRule, 'string', 'min:12', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/', 'confirmed'];
+
         return [
             'nombre' => [$nameRule, 'string', 'max:100'],
             'email' => [
@@ -157,7 +159,7 @@ class UsuarioController extends AuthController
                 'max:150',
                 Rule::unique('usuarios', 'email')->ignore($usuario?->id),
             ],
-            'password' => [$passwordRule, 'string', 'min:8', 'confirmed'],
+            'password' => $passwordRules,
         ];
     }
 

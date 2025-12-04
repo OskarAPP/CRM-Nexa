@@ -9,8 +9,9 @@ import {
   type MediaType,
   type TabKey,
 } from './templateHistory'
+import { API_BASE } from '../config/api'
+import { safeStorage } from '../utils/safeStorage'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 const CSRF_ENDPOINT = `${API_BASE}/sanctum/csrf-cookie`
 
 const getXsrfToken = (): string | null => {
@@ -84,7 +85,7 @@ function MessageManager() {
   const resolveUserId = useCallback((): number | null => {
     if (typeof window === 'undefined') return null
     try {
-      const raw = window.localStorage.getItem('user_id')
+      const raw = safeStorage.get('user_id')
       if (!raw) return null
       const trimmed = raw.trim()
       if (!trimmed) return null

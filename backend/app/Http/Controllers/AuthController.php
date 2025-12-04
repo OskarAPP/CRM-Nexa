@@ -27,7 +27,7 @@ class AuthController extends Controller
             'apellidos' => 'required|string|max:255',
             'numero_telefonico' => 'required|string|max:20',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:6|confirmed',
+            'password' => ['required', 'string', 'min:12', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).+$/', 'confirmed'],
             'estado' => 'required|string|max:100',
             'municipio' => 'required|string|max:100',
             'direccion' => 'required|string',
